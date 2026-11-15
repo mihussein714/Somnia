@@ -299,7 +299,7 @@ def page_overview(df, df_all, report):
     with right:
         drivers = sd.driver_table(df)
         if not drivers.empty:
-            show(viz.driver_bar(drivers, "What moves sleep quality?"), "ov_driver")
+            show(viz.driver_bar(drivers, "What moves sleep quality?", height=480), "ov_driver")
             st.caption("↑ higher values go with better sleep · ↓ higher values go with worse sleep · “by group” = a category, such as occupation.")
     if not drivers.empty:
         top = drivers.iloc[0]

@@ -120,15 +120,15 @@ def corr_heatmap(corr, title):
   return fig
 
 
-def driver_bar(drivers, title):
+def driver_bar(drivers, title, height=400):
     d = drivers.sort_values("strength")
     colors = [GROUP_COLORS.get(g, "#64748B") for g in d["Group"]]
     labels = [f"{s:.2f}" + (" (by group)" if np.isnan(r) else (" ↓" if r < 0 else " ↑")) for s, r in zip(d["strength"], d["r"])]
     fig = go.Figure(go.Bar(y=d["Factor"], x=d["strength"], orientation="h", marker=dict(color=colors), text=labels,
                            textposition="outside", customdata=np.stack([d["Group"], d["Method"]], axis=-1),
                            hovertemplate="%{y}<br>Closeness: %{x:.2f}<br>%{customdata[0]} · %{customdata[1]}<extra></extra>"))
-    fig.update_xaxes(title_text="How closely it lines up with sleep quality (0 = not at all, 1 = perfectly)", range=[0, min(1.15, max(0.4, d["strength"].max() * 1.25))])
-    return style(fig, 400, title, legend=False)
+    fig.update_xaxes(title_text="Correlation with sleep quality (0 to 1)", range=[0, min(1.15, max(0.4, d["strength"].max() * 1.25))])
+    return style(fig, height, title, legend=False)
 
 
 def contribution_bar(table, title):
