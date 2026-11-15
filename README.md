@@ -1,4 +1,4 @@
-# 🌙 Sleep Declassified
+# 🌙 Somnia Analytics
 
 Premium-style analytics dashboard for the **"Sleep on It" Sleep, Health & Lifestyle Data Analytics Challenge**.
 Research question: *What matters more for sleep quality — stress, physical activity, or lifestyle?*
