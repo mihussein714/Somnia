@@ -38,6 +38,10 @@ SAMPLE = next((p for p in (Path(__file__).parent / "data" / _SAMPLE_NAME, Path(_
               Path(__file__).parent / "data" / _SAMPLE_NAME)   # bundled Kaggle CSV (data/ folder, or next to app.py)
 PAGES = ["Overview", "Sleep Patterns", "Stress Analysis", "Lifestyle Analysis", "Demographic Insights",
          "Sleep Profiles", "Compare Profiles", "Final Discoveries"]
+# One clean URL per dashboard section (served by st.navigation; the sidebar radio below stays the visible menu).
+ROUTES = {"Overview": "overview", "Sleep Patterns": "sleep-analysis", "Stress Analysis": "stress-analysis",
+          "Lifestyle Analysis": "lifestyle-analysis", "Demographic Insights": "demographics",
+          "Sleep Profiles": "sleep-profiles", "Compare Profiles": "compare-profiles", "Final Discoveries": "discoveries"}
 CHART_CFG = {"displayModeBar": False}
 TARGET = sd.TARGET
 DURATION, STRESS, ACTIVITY = "Sleep Duration", "Stress Level", "Physical Activity Level"
@@ -126,6 +130,8 @@ def exit_demo() -> None:
             or k in ("raw", "name", "ds_id", "demo", "page", "last_sig", "upload_error", "_splash")]
     for k in drop:
         st.session_state.pop(k, None)
+    st.session_state.pop("_route", None)
+    st.session_state["_to_home"] = True                  # main() sends the browser back to "/"
 
 
 def landing() -> None:
@@ -651,6 +657,72 @@ def export_csv(df) -> bytes:
 # --------------------------------------------------------------------------- main
 def main():
     theme.inject_css()
+    ctx = {}                                   # sidebar pieces the page body needs (filled below)
+
+    def body():                                # the existing page: landing, filters, banner and the selected section
+        if "raw" not in st.session_state:
+            landing()
+            return
+        filters_slot, card_slot, page = ctx["filters_slot"], ctx["card_slot"], ctx["page"]
+
+        try:
+            if st.session_state.pop("_splash", False):
+                run_splash(lambda: parse_upload(st.session_state["raw"]), DEMO_STEPS)
+            df_all, report = parse_upload(st.session_state["raw"])
+        except sd.DataError as exc:  # should not happen (validated on upload) but never crash
+            st.session_state.pop("raw")
+            st.session_state["upload_error"] = str(exc)
+            st.rerun()
+            return
+
+        with filters_slot:
+            df = sidebar_filters(df_all)
+        with card_slot:
+            theme.dataset_card(st.session_state.get("name", "uploaded.csv"), len(df_all), len(df),
+                               len([c for c in df_all.columns if c in sd.ALIASES]))
+            theme.spacer(16)
+            st.download_button("Download filtered data (.csv)", data=export_csv(df), file_name="somnia_filtered.csv",
+                               mime="text/csv", key="dl_side")
+
+        err = st.session_state.pop("upload_error", None)
+        if err:
+            theme.callout(esc(err) + " The previous dataset is still loaded.", "The new file couldn't be used", "error")
+
+        if st.session_state.get("demo"):
+            demo_banner(df, df_all)
+        theme.chips([f"{len(df):,} of {len(df_all):,} participants in view"])
+        if df.empty:
+            theme.callout("No records match the current filters. Select at least one gender, widen the age range, "
+                          "or press <b>Reset filters</b>.", "Nothing to show", "warn")
+            return
+
+        {"Overview": lambda: page_overview(df, df_all, report), "Sleep Patterns": lambda: page_sleep(df),
+         "Stress Analysis": lambda: page_stress(df), "Lifestyle Analysis": lambda: page_lifestyle(df),
+         "Demographic Insights": lambda: page_demographics(df),
+         "Sleep Profiles": lambda: page_profiles(df), "Compare Profiles": lambda: page_compare(df),
+         "Final Discoveries": lambda: page_final(df, df_all, report)}[page]()
+
+    def route(path=None):                      # one callable per URL, so every section is its own st.Page
+        def fn():
+            body()
+        fn.__name__ = "route_" + (path or "home").replace("-", "_")
+        return fn
+
+    home = st.Page(route(), title="Somnia", icon="🌙", default=True)             # "/" : start page
+    pages = {n: st.Page(route(r), title=n, url_path=r) for n, r in ROUTES.items()}
+    try:
+        pg = st.navigation([home, *pages.values()], position="hidden")           # our own sidebar menu stays the visible one
+    except TypeError:                                                            # older Streamlit: native nav is hidden by CSS
+        pg = st.navigation([home, *pages.values()])
+    here = next((n for n, r in ROUTES.items() if r == pg.url_path), None)        # section the URL points to (None = "/")
+
+    if st.session_state.pop("_to_home", False):
+        st.switch_page(home)
+    if here is None and "raw" in st.session_state:                               # data loaded but sitting on "/": open a section
+        st.switch_page(pages[st.session_state.get("page", "Overview")])
+    if here and st.session_state.get("_route") != here:                          # URL changed (link, refresh, back button)
+        st.session_state.update(page=here, _route=here)
+
     with st.sidebar:
         theme.brand()
         if "raw" not in st.session_state:
@@ -660,55 +732,19 @@ def main():
             theme.side_label("Workspace")
             theme.spacer(4)
             page = st.radio("Navigate", PAGES, key="page", label_visibility="collapsed")
-            filters_slot = st.container()          # filled once the data is parsed (keeps filters above the dataset card)
+            if page != here:                       # a sidebar click -> open that section's URL
+                st.switch_page(pages[page])
+            ctx["page"] = page
+            filters_slot = ctx["filters_slot"] = st.container()          # filled once the data is parsed (keeps filters above the dataset card)
             theme.spacer(10)
             theme.side_label("Dataset")
             theme.spacer(4)
-            card_slot = st.container()
+            card_slot = ctx["card_slot"] = st.container()
             theme.spacer(8)
             with st.expander("Replace dataset"):
                 ingest(st.file_uploader("Upload a new file (.csv)", type=["csv"], key="side_up", label_visibility="collapsed"))
 
-    if "raw" not in st.session_state:
-        landing()
-        return
-
-    try:
-        if st.session_state.pop("_splash", False):
-            run_splash(lambda: parse_upload(st.session_state["raw"]), DEMO_STEPS)
-        df_all, report = parse_upload(st.session_state["raw"])
-    except sd.DataError as exc:  # should not happen (validated on upload) but never crash
-        st.session_state.pop("raw")
-        st.session_state["upload_error"] = str(exc)
-        st.rerun()
-        return
-
-    with filters_slot:
-        df = sidebar_filters(df_all)
-    with card_slot:
-        theme.dataset_card(st.session_state.get("name", "uploaded.csv"), len(df_all), len(df),
-                           len([c for c in df_all.columns if c in sd.ALIASES]))
-        theme.spacer(16)
-        st.download_button("Download filtered data (.csv)", data=export_csv(df), file_name="somnia_filtered.csv",
-                           mime="text/csv", key="dl_side")
-
-    err = st.session_state.pop("upload_error", None)
-    if err:
-        theme.callout(esc(err) + " The previous dataset is still loaded.", "The new file couldn't be used", "error")
-
-    if st.session_state.get("demo"):
-        demo_banner(df, df_all)
-    theme.chips([f"{len(df):,} of {len(df_all):,} participants in view"])
-    if df.empty:
-        theme.callout("No records match the current filters. Select at least one gender, widen the age range, "
-                      "or press <b>Reset filters</b>.", "Nothing to show", "warn")
-        return
-
-    {"Overview": lambda: page_overview(df, df_all, report), "Sleep Patterns": lambda: page_sleep(df),
-     "Stress Analysis": lambda: page_stress(df), "Lifestyle Analysis": lambda: page_lifestyle(df),
-     "Demographic Insights": lambda: page_demographics(df),
-     "Sleep Profiles": lambda: page_profiles(df), "Compare Profiles": lambda: page_compare(df),
-     "Final Discoveries": lambda: page_final(df, df_all, report)}[page]()
+    pg.run()
 
 
 main()

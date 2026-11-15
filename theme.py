@@ -344,6 +344,7 @@ progress,[data-testid="stProgress"] div[role="progressbar"]>div{accent-color:#8B
 SIDEBAR_TOP_CSS = """
 <style>
 [data-testid="stSidebarUserContent"]{padding-top:1rem !important;}
+[data-testid="stSidebarNav"]{display:none !important;}  /* routing is driven by our own sidebar menu */
 [data-testid="stSidebarContent"]{position:relative;}
 /* collapse button: pinned fully inside the sidebar's top-right corner, out of the logo's way */
 [data-testid="stSidebarHeader"]{position:absolute !important;top:.6rem !important;right:.6rem !important;left:auto !important;width:auto !important;height:2rem !important;min-height:0 !important;padding:0 !important;margin:0 !important;display:flex !important;align-items:center;overflow:visible !important;z-index:1000150;}
