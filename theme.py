@@ -344,8 +344,13 @@ progress,[data-testid="stProgress"] div[role="progressbar"]>div{accent-color:#8B
 SIDEBAR_TOP_CSS = """
 <style>
 [data-testid="stSidebarUserContent"]{padding-top:1rem !important;}
-[data-testid="stSidebarHeader"]{height:auto !important;min-height:0 !important;padding:.5rem 1rem 0 !important;margin-bottom:0 !important;}
-[data-testid="stSidebarUserContent"] .brand{margin-top:0 !important;}
+[data-testid="stSidebarContent"]{position:relative;}
+/* collapse button: pinned fully inside the sidebar's top-right corner, out of the logo's way */
+[data-testid="stSidebarHeader"]{position:absolute !important;top:.6rem !important;right:.6rem !important;left:auto !important;width:auto !important;height:2rem !important;min-height:0 !important;padding:0 !important;margin:0 !important;display:flex !important;align-items:center;overflow:visible !important;z-index:1000150;}
+[data-testid="stSidebarHeader"] [data-testid="stLogoSpacer"]{display:none !important;}
+[data-testid="stSidebarCollapseButton"] button{width:2rem;height:2rem;color:#E7EAF6 !important;}
+[data-testid="stSidebarCollapseButton"] button svg,[data-testid="stSidebarCollapseButton"] button span{color:#E7EAF6 !important;fill:currentColor;}
+[data-testid="stSidebarUserContent"] .brand{margin-top:0 !important;padding-right:2.6rem;}  /* never run under the button */
 </style>
 """
 
