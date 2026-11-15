@@ -337,6 +337,15 @@ progress,[data-testid="stProgress"] div[role="progressbar"]>div{accent-color:#8B
 """
 
 
+SIDEBAR_TOP_CSS = """
+<style>
+[data-testid="stSidebarUserContent"]{padding-top:1rem !important;}
+[data-testid="stSidebarHeader"]{height:auto !important;min-height:0 !important;padding:.5rem 1rem 0 !important;margin-bottom:0 !important;}
+[data-testid="stSidebarUserContent"] .brand{margin-top:0 !important;}
+</style>
+"""
+
+
 def _nav_icon_css() -> str:
     return "\n".join(
         f'section[data-testid="stSidebar"] div[role="radiogroup"]>label:nth-of-type({i}):before'
@@ -347,6 +356,7 @@ def inject_css() -> None:
     st.markdown(CSS, unsafe_allow_html=True)
     st.markdown(SIDEBAR_CSS.replace("__NAVICONS__", _nav_icon_css()), unsafe_allow_html=True)
     st.markdown(PRO_CSS, unsafe_allow_html=True)
+    st.markdown(SIDEBAR_TOP_CSS, unsafe_allow_html=True)
 
 
 def _flat(s: str) -> str:
