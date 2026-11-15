@@ -42,8 +42,9 @@ DURATION, STRESS, ACTIVITY = "Sleep Duration", "Stress Level", "Physical Activit
 
 
 def show(fig, key):
-    st.plotly_chart(fig, theme=None, config=CHART_CFG, key=key)
-
+  st.plotly_chart(
+      fig, theme=None, config=CHART_CFG, key=key, use_container_width=True
+  )
 
 def have(df, *cols):
     return all(c in df.columns for c in cols)

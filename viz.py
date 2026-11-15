@@ -98,13 +98,23 @@ def heatmap_counts(df, x, y, title):
 
 
 def corr_heatmap(corr, title):
-    fig = go.Figure(go.Heatmap(z=corr.values, x=list(corr.columns), y=list(corr.index), zmin=-1, zmax=1,
-                               text=corr.round(2).values, texttemplate="%{text}",
-                               colorscale=[[0, "#F472B6"], [.5, "#141B34"], [1, "#22D3EE"]],
-                               hovertemplate="%{y} × %{x}<br>ρ = %{z:.2f}<extra></extra>",
-                               colorbar=dict(title="ρ", thickness=10)))
-    fig.update_yaxes(autorange="reversed")
-    return style(fig, 430, title, legend=False)
+  fig = go.Figure(
+      go.Heatmap(
+          z=corr.values,
+          x=list(corr.columns),
+          y=list(corr.index),
+          zmin=-1,
+          zmax=1,
+          text=corr.round(2).values,
+          texttemplate="%{text}",
+          colorscale=[[0, "#F472B6"], [.5, "#141B34"], [1, "#22D3EE"]],
+          hovertemplate="%{y} × %{x}<br>ρ = %{z:.2f}<extra></extra>",
+          colorbar=dict(title="ρ", thickness=10),
+      )
+  )
+  fig.update_yaxes(autorange="reversed")
+  fig.update_xaxes(tickangle=-30)  # <-- Tilts labels to prevent horizontal overflow
+  return style(fig, 430, title, legend=False)
 
 
 def driver_bar(drivers, title):
