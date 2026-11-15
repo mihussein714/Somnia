@@ -588,7 +588,7 @@ def main():
     with st.sidebar:
         theme.brand()
         if "raw" not in st.session_state:
-            st.caption("Upload a CSV to unlock the dashboard.")
+            st.caption("Upload the data to unlock the dashboard. (.csv)")
         else:
             theme.side_label("Workspace")
             theme.spacer(4)
@@ -600,7 +600,7 @@ def main():
             card_slot = st.container()
             theme.spacer(8)
             with st.expander("Replace dataset"):
-                ingest(st.file_uploader("Upload a new CSV", type=["csv"], key="side_up", label_visibility="collapsed"))
+                ingest(st.file_uploader("Upload a new file (.csv)", type=["csv"], key="side_up", label_visibility="collapsed"))
 
     if "raw" not in st.session_state:
         landing()
@@ -622,7 +622,7 @@ def main():
         theme.dataset_card(st.session_state.get("name", "uploaded.csv"), len(df_all), len(df),
                            len([c for c in df_all.columns if c in sd.ALIASES]))
         theme.spacer(16)
-        st.download_button("Download filtered CSV", data=export_csv(df), file_name="somnia_filtered.csv",
+        st.download_button("Download filtered data (.csv)", data=export_csv(df), file_name="somnia_filtered.csv",
                            mime="text/csv", key="dl_side")
 
     err = st.session_state.pop("upload_error", None)
