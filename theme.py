@@ -409,17 +409,13 @@ DEMO_CSS = """
 
 CHART_FIX_CSS = """
 <style>
-div[data-testid="stPlotlyChart"]{box-sizing:border-box;height:auto !important;max-width:100%;overflow:hidden !important;}
-div[data-testid="stPlotlyChart"] *{scrollbar-width:none;}
-div[data-testid="stPlotlyChart"] *::-webkit-scrollbar{display:none;}
-div[data-testid="stPlotlyChart"] > div,div[data-testid="stPlotlyChart"] .js-plotly-plot,div[data-testid="stPlotlyChart"] .plot-container{overflow:hidden !important;max-width:100%;}
+/* Chart panels: the panel is exactly as tall as the figure (+ its padding), so nothing is clipped and nothing scrolls. */
+div[data-testid="stElementContainer"]:has(div[data-testid="stPlotlyChart"]){height:auto !important;min-height:0 !important;overflow:visible !important;}
+div[data-testid="stPlotlyChart"]{box-sizing:border-box !important;height:auto !important;min-height:0 !important;max-width:100%;overflow:visible !important;}
+div[data-testid="stPlotlyChart"] > div{height:auto !important;overflow:visible !important;max-width:100%;}
 div[data-testid="stPlotlyChart"] .svg-container{max-width:100%;}
-/* no inner scrollbars: the chart's wrapper and the rows/columns around it size to their content instead of a fixed height */
-div[data-testid="stElementContainer"]:has(div[data-testid="stPlotlyChart"]){height:auto !important;min-height:0 !important;overflow:hidden !important;}
-div[data-testid="stElementContainer"]:has(div[data-testid="stPlotlyChart"]),div[data-testid="stPlotlyChart"],div[data-testid="stElementContainer"]:has(div[data-testid="stPlotlyChart"]) *{scrollbar-width:none !important;-ms-overflow-style:none !important;}
-div[data-testid="stElementContainer"]:has(div[data-testid="stPlotlyChart"])::-webkit-scrollbar,div[data-testid="stPlotlyChart"]::-webkit-scrollbar,div[data-testid="stElementContainer"]:has(div[data-testid="stPlotlyChart"]) *::-webkit-scrollbar{display:none !important;width:0 !important;height:0 !important;}
-div[data-testid="stPlotlyChart"] div{overflow:hidden !important;}
-[data-testid="stMain"] [data-testid="stHorizontalBlock"],[data-testid="stMain"] [data-testid="stColumn"],[data-testid="stMain"] [data-testid="stVerticalBlock"]{overflow:visible !important;}
+div[data-testid="stPlotlyChart"],div[data-testid="stPlotlyChart"] *{scrollbar-width:none !important;-ms-overflow-style:none !important;}
+div[data-testid="stPlotlyChart"]::-webkit-scrollbar,div[data-testid="stPlotlyChart"] *::-webkit-scrollbar{display:none !important;width:0 !important;height:0 !important;}
 </style>
 """
 
