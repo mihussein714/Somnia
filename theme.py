@@ -346,6 +346,44 @@ SIDEBAR_TOP_CSS = """
 """
 
 
+MOBILE_CSS = """
+<style>
+.cmp-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:16px;}
+.cmp-wrap .cmp{min-width:560px;}
+@media (max-width:900px){
+  [data-testid="stMainBlockContainer"],.block-container{padding:1rem 1rem 3rem !important;}
+  .kpi-grid{grid-template-columns:repeat(2,1fr) !important;gap:.7rem;}
+  .find-grid,.prof-grid{grid-template-columns:1fr !important;}
+}
+@media (max-width:640px){
+  [data-testid="stMainBlockContainer"],.block-container{padding:.75rem .75rem 2.5rem !important;}
+  .hero2{padding:1.3rem 1.15rem 1.15rem;border-radius:20px;}
+  .hero2 h1{font-size:1.85rem !important;margin:.7rem 0 .9rem;}
+  .rq{font-size:.92rem;padding:.7rem .9rem;}
+  .hero-stats{display:grid;grid-template-columns:1fr 1fr;gap:1rem 1.2rem;margin-top:1.2rem;padding-top:1rem;}
+  .hstat b{font-size:1.35rem;}
+  .kpi-grid{grid-template-columns:1fr 1fr !important;}
+  .prof-stats{grid-template-columns:repeat(2,1fr) !important;}
+  .prof p,.prof .meta{-webkit-line-clamp:unset;display:block;}
+  .prof h4{white-space:normal;}
+  h1{font-size:1.7rem !important;}
+  h2,h3{font-size:1.15rem !important;}
+  [data-testid="stSidebar"] [data-baseweb="radio"]{min-height:44px;}
+  .stButton>button,.stDownloadButton>button{min-height:44px;width:100%;}
+  [data-testid="stHorizontalBlock"]{gap:.75rem !important;}
+  [data-testid="stRadio"] [role="radiogroup"]{flex-wrap:wrap;gap:.4rem;}
+  .js-plotly-plot .legend text{font-size:11px !important;}
+  .ld-name{font-size:1.6rem;}
+  .steps,.step-grid{grid-template-columns:1fr !important;}
+}
+@media (hover:none){
+  .prof:hover{border-color:var(--line);}
+  [data-testid="stSidebar"] div[role="radiogroup"]>label:hover{transform:none !important;}
+}
+</style>
+"""
+
+
 def _nav_icon_css() -> str:
     return "\n".join(
         f'section[data-testid="stSidebar"] div[role="radiogroup"]>label:nth-of-type({i}):before'
@@ -357,6 +395,7 @@ def inject_css() -> None:
     st.markdown(SIDEBAR_CSS.replace("__NAVICONS__", _nav_icon_css()), unsafe_allow_html=True)
     st.markdown(PRO_CSS, unsafe_allow_html=True)
     st.markdown(SIDEBAR_TOP_CSS, unsafe_allow_html=True)
+    st.markdown(MOBILE_CSS, unsafe_allow_html=True)
 
 
 def _flat(s: str) -> str:
@@ -498,8 +537,8 @@ def compare_table(rows, name_a: str, name_b: str) -> None:
         body += (f'<tr><td>{esc(r.label)}</td><td>{r.a:,.{r.dec}f}{esc(r.unit)}</td><td>{r.b:,.{r.dec}f}{esc(r.unit)}</td>'
                  f'<td>{sign}{abs(r.diff):,.{r.dec}f}{esc(r.unit)}</td>'
                  f'<td><span class="eff">{sd.effect_word(r.d)}{"" if r.d != r.d else f" (d = {r.d:+.2f})"}</span></td></tr>')
-    render(f'<table class="cmp"><thead><tr><th>Metric</th><th>{esc(name_a)}</th><th>{esc(name_b)}</th><th>Difference (A − B)</th>'
-           f'<th>Effect size</th></tr></thead><tbody>{body}</tbody></table>')
+    render(f'<div class="cmp-wrap"><table class="cmp"><thead><tr><th>Metric</th><th>{esc(name_a)}</th><th>{esc(name_b)}</th><th>Difference (A − B)</th>'
+           f'<th>Effect size</th></tr></thead><tbody>{body}</tbody></table></div>')
 
 
 LOADER_CSS = """

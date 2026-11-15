@@ -163,7 +163,7 @@ def box(df, x, y, title, order=None, height=380):
 def compare_bars(rows, name_a, name_b, title=None):
     """Small multiples: one panel per metric, two bars (profile A vs B). rows: sleepdata.compare_profiles output."""
     n = len(rows)
-    cols = min(4, n)
+    cols = min(3, n)
     nrows = -(-n // cols)
     fig = make_subplots(rows=nrows, cols=cols, subplot_titles=list(rows["label"]), horizontal_spacing=.07, vertical_spacing=.24)
     for i, r in enumerate(rows.itertuples()):
