@@ -654,6 +654,7 @@ def main():
     with st.sidebar:
         theme.brand()
         if "raw" not in st.session_state:
+            theme.spacer(16)
             st.caption("Launch the demo or upload a CSV to unlock the dashboard.")
         else:
             theme.side_label("Workspace")
