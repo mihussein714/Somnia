@@ -21,7 +21,11 @@ CSS = """
              radial-gradient(900px 520px at 100% 0%,rgba(59,130,246,.18),transparent 55%),
              radial-gradient(700px 500px at 60% 110%,rgba(34,211,238,.07),transparent 60%),#0B0F19;}
 header[data-testid="stHeader"]{background:transparent;}
-#MainMenu,footer,.stDeployButton,[data-testid="stToolbar"],[data-testid="stDecoration"],[data-testid="stStatusWidget"]{visibility:hidden !important;display:none !important;}
+#MainMenu,footer,.stDeployButton,.stAppDeployButton,[data-testid="stMainMenu"],[data-testid="stToolbarActions"],[data-testid="stDecoration"],[data-testid="stStatusWidget"]{visibility:hidden !important;display:none !important;}
+[data-testid="stSidebarCollapsedControl"],[data-testid="stExpandSidebarButton"],[data-testid="collapsedControl"],[data-testid="stSidebarCollapseButton"]{display:flex !important;visibility:visible !important;opacity:1 !important;z-index:1000150 !important;}
+[data-testid="stSidebarCollapsedControl"] button,[data-testid="stExpandSidebarButton"],[data-testid="collapsedControl"] button{background:rgba(139,92,246,.22) !important;border:1px solid rgba(139,92,246,.55) !important;border-radius:12px !important;color:#E7EAF6 !important;}
+header[data-testid="stHeader"]{z-index:1000100 !important;pointer-events:none;}
+header[data-testid="stHeader"] *{pointer-events:auto;}
 footer{height:0;}
 .block-container{padding-top:2rem;padding-bottom:4rem;max-width:1280px;}
 h1,h2,h3,h4{letter-spacing:-.02em;}
