@@ -39,7 +39,7 @@ SAMPLE = next((p for p in (Path(__file__).parent / "data" / _SAMPLE_NAME, Path(_
 PAGES = ["Overview", "Sleep Patterns", "Stress Analysis", "Lifestyle Analysis", "Demographic Insights",
          "Sleep Profiles", "Compare Profiles", "Final Discoveries"]
 # One clean URL per dashboard section (served by st.navigation; the sidebar radio below stays the visible menu).
-ROUTES = {"Overview": "overview", "Sleep Patterns": "sleep-analysis", "Stress Analysis": "stress-analysis",
+ROUTES = {"Overview": "dashboard", "Sleep Patterns": "sleep-analysis", "Stress Analysis": "stress-analysis",
           "Lifestyle Analysis": "lifestyle-analysis", "Demographic Insights": "demographics",
           "Sleep Profiles": "sleep-profiles", "Compare Profiles": "compare-profiles", "Final Discoveries": "discoveries"}
 CHART_CFG = {"displayModeBar": False}
@@ -115,12 +115,12 @@ def set_dataset(raw: bytes, name: str, demo: bool = False) -> None:
 
 
 def launch_demo() -> None:
-    """One click: load the bundled real dataset, hide repeated records, and open the Overview page."""
+    """One click: load the bundled real dataset (repeated records included) and open the Overview page."""
     set_dataset(SAMPLE.read_bytes(), SAMPLE.name, demo=True)
     ds = st.session_state["ds_id"]
     for p in FILTER_KEYS:
         st.session_state.pop(f"{p}{ds}", None)           # start from the default age / gender / occupation filters...
-    st.session_state[f"rep_{ds}"] = True                 # ...plus the demo filter: exclude repeated profiles
+    st.session_state[f"rep_{ds}"] = False                # ...and keep repeated profiles in (the sidebar toggle can still exclude them)
     st.session_state.update(page="Overview", _splash=True)
 
 
