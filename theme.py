@@ -388,6 +388,17 @@ MOBILE_CSS = """
 """
 
 
+CHART_FIX_CSS = """
+<style>
+div[data-testid="stPlotlyChart"]{box-sizing:border-box;height:auto !important;max-width:100%;overflow:hidden !important;}
+div[data-testid="stPlotlyChart"] *{scrollbar-width:none;}
+div[data-testid="stPlotlyChart"] *::-webkit-scrollbar{display:none;}
+div[data-testid="stPlotlyChart"] > div,div[data-testid="stPlotlyChart"] .js-plotly-plot,div[data-testid="stPlotlyChart"] .plot-container{overflow:hidden !important;max-width:100%;}
+div[data-testid="stPlotlyChart"] .svg-container{max-width:100%;}
+</style>
+"""
+
+
 def _nav_icon_css() -> str:
     return "\n".join(
         f'section[data-testid="stSidebar"] div[role="radiogroup"]>label:nth-of-type({i}):before'
@@ -400,6 +411,7 @@ def inject_css() -> None:
     st.markdown(PRO_CSS, unsafe_allow_html=True)
     st.markdown(SIDEBAR_TOP_CSS, unsafe_allow_html=True)
     st.markdown(MOBILE_CSS, unsafe_allow_html=True)
+    st.markdown(CHART_FIX_CSS, unsafe_allow_html=True)
 
 
 def _flat(s: str) -> str:
