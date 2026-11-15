@@ -409,10 +409,11 @@ DEMO_CSS = """
 
 CHART_FIX_CSS = """
 <style>
-/* Chart panels: the panel is exactly as tall as the figure (+ its padding), so nothing is clipped and nothing scrolls. */
-div[data-testid="stElementContainer"]:has(div[data-testid="stPlotlyChart"]){height:auto !important;min-height:0 !important;overflow:visible !important;}
-div[data-testid="stPlotlyChart"]{box-sizing:border-box !important;height:auto !important;min-height:0 !important;max-width:100%;overflow:visible !important;}
-div[data-testid="stPlotlyChart"] > div{height:auto !important;overflow:visible !important;max-width:100%;}
+/* Chart panels: Streamlit reserves exactly the figure's height, so the panel must not add padding/border on top of it
+   (that extra is what overflowed, scrolled and later overlapped the text below). The 1px outline is an inset shadow instead. */
+div[data-testid="stPlotlyChart"]{box-sizing:border-box !important;padding:0 !important;border:0 !important;max-width:100%;overflow:hidden;
+  box-shadow:inset 0 0 0 1px var(--line),0 10px 30px rgba(5,8,25,.4);}
+div[data-testid="stPlotlyChart"]:hover{box-shadow:inset 0 0 0 1px rgba(139,92,246,.45),0 16px 44px rgba(5,8,25,.55);}
 div[data-testid="stPlotlyChart"] .svg-container{max-width:100%;}
 div[data-testid="stPlotlyChart"],div[data-testid="stPlotlyChart"] *{scrollbar-width:none !important;-ms-overflow-style:none !important;}
 div[data-testid="stPlotlyChart"]::-webkit-scrollbar,div[data-testid="stPlotlyChart"] *::-webkit-scrollbar{display:none !important;width:0 !important;height:0 !important;}
