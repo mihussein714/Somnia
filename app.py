@@ -656,8 +656,6 @@ def main():
         if "raw" not in st.session_state:
             st.caption("Launch the demo or upload a CSV to unlock the dashboard.")
         else:
-            if st.session_state.get("demo"):
-                st.button("✕ Exit demo", on_click=exit_demo, key="exit_demo_side", help="Leave the demo and return to the start page")
             theme.side_label("Workspace")
             theme.spacer(4)
             page = st.radio("Navigate", PAGES, key="page", label_visibility="collapsed")

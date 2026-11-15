@@ -113,8 +113,11 @@ def corr_heatmap(corr, title):
       )
   )
   fig.update_yaxes(autorange="reversed")
-  fig.update_xaxes(tickangle=-30)  # <-- Tilts labels to prevent horizontal overflow
-  return style(fig, 430, title, legend=False)
+  fig.update_xaxes(tickangle=-30, automargin=True)  # tilted labels; automargin grows the bottom margin to fit them
+  fig.update_yaxes(automargin=True)
+  style(fig, 480, title, legend=False)
+  fig.update_layout(margin=dict(b=110))  # explicit room so the angled x labels are never clipped
+  return fig
 
 
 def driver_bar(drivers, title):
