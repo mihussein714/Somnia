@@ -37,9 +37,9 @@ def style(fig, height=380, title=None, legend=True):
 
 def histogram(df, col, title, nbins=None, color=PALETTE[0], unit=""):
     fig = go.Figure(go.Histogram(x=df[col], nbinsx=nbins, marker=dict(color=color, line=dict(color="rgba(255,255,255,.3)", width=1)),
-                                 opacity=.9, hovertemplate=f"{col}: %{{x}}<br>Count: %{{y}}<extra></extra>"))
+                                 opacity=.9, hovertemplate=f"{col}: %{{x}}<br>People: %{{y}}<extra></extra>"))
     mean = df[col].mean()
-    fig.add_vline(x=mean, line_dash="dash", line_color=PALETTE[2], annotation_text=f"mean {mean:.2f}{unit}",
+    fig.add_vline(x=mean, line_dash="dash", line_color=PALETTE[2], annotation_text=f"average {mean:.2f}{unit}",
                   annotation_position="top right", annotation_font_color=PALETTE[2])
     fig.update_yaxes(title_text="Participants")
     fig.update_xaxes(title_text=col)
@@ -70,7 +70,7 @@ def scatter(df, x, y, color=None, jx=0.0, jy=0.0, hover=(), title=None, height=4
     if trend and d[x].nunique() > 1 and len(d) > 2:
         slope, icpt = np.polyfit(d[x], d[y], 1)
         xs = np.array([d[x].min(), d[x].max()])
-        fig.add_trace(go.Scatter(x=xs, y=slope * xs + icpt, mode="lines", name="Linear trend",
+        fig.add_trace(go.Scatter(x=xs, y=slope * xs + icpt, mode="lines", name="Overall trend",
                                  line=dict(color="#FBBF24", width=2.5, dash="dash"), hoverinfo="skip"))
     fig.update_xaxes(title_text=x)
     fig.update_yaxes(title_text=y)
@@ -78,10 +78,10 @@ def scatter(df, x, y, color=None, jx=0.0, jy=0.0, hover=(), title=None, height=4
 
 
 def mean_bars(g, label, mean, n, title, ytitle):
-    """Bars of a mean per category/bin with n in the hover."""
+    """Bars of an average per category/bin with the number of people in the hover."""
     fig = go.Figure(go.Bar(x=g[label].astype(str), y=g[mean], customdata=g[n], text=g[mean].round(2), textposition="outside",
                            marker=dict(color=g[mean], colorscale=GRADIENT, line=dict(width=0)),
-                           hovertemplate="%{x}<br>Mean: %{y:.2f}<br>n = %{customdata}<extra></extra>"))
+                           hovertemplate="%{x}<br>Average: %{y:.2f}<br>People: %{customdata}<extra></extra>"))
     fig.update_xaxes(type="category")
     fig.update_yaxes(title_text=ytitle, rangemode="tozero")
     return style(fig, 380, title, legend=False)
@@ -108,8 +108,8 @@ def corr_heatmap(corr, title):
           text=corr.round(2).values,
           texttemplate="%{text}",
           colorscale=[[0, "#F472B6"], [.5, "#141B34"], [1, "#22D3EE"]],
-          hovertemplate="%{y} × %{x}<br>ρ = %{z:.2f}<extra></extra>",
-          colorbar=dict(title="ρ", thickness=10),
+          hovertemplate="%{y} × %{x}<br>Link score: %{z:.2f}<extra></extra>",
+          colorbar=dict(title="Link", thickness=10),
       )
   )
   fig.update_yaxes(autorange="reversed")
@@ -120,23 +120,23 @@ def corr_heatmap(corr, title):
 def driver_bar(drivers, title):
     d = drivers.sort_values("strength")
     colors = [GROUP_COLORS.get(g, "#64748B") for g in d["Group"]]
-    labels = [f"{s:.2f}" + (" (η)" if np.isnan(r) else (" ↓" if r < 0 else " ↑")) for s, r in zip(d["strength"], d["r"])]
+    labels = [f"{s:.2f}" + (" (by group)" if np.isnan(r) else (" ↓" if r < 0 else " ↑")) for s, r in zip(d["strength"], d["r"])]
     fig = go.Figure(go.Bar(y=d["Factor"], x=d["strength"], orientation="h", marker=dict(color=colors), text=labels,
                            textposition="outside", customdata=np.stack([d["Group"], d["Method"]], axis=-1),
-                           hovertemplate="%{y}<br>Strength: %{x:.2f}<br>%{customdata[0]} · %{customdata[1]}<extra></extra>"))
-    fig.update_xaxes(title_text="Association strength with sleep quality (0–1)", range=[0, min(1.15, max(0.4, d["strength"].max() * 1.25))])
+                           hovertemplate="%{y}<br>Closeness: %{x:.2f}<br>%{customdata[0]} · %{customdata[1]}<extra></extra>"))
+    fig.update_xaxes(title_text="How closely it lines up with sleep quality (0 = not at all, 1 = perfectly)", range=[0, min(1.15, max(0.4, d["strength"].max() * 1.25))])
     return style(fig, 400, title, legend=False)
 
 
 def contribution_bar(table, title):
     t = table.sort_values("alone", ascending=False)
     fig = go.Figure()
-    fig.add_bar(x=t["group"], y=t["alone"], name="Explains on its own", marker_color=PALETTE[0],
-                hovertemplate="%{x}<br>On its own: %{y:.1%}<extra></extra>")
-    fig.add_bar(x=t["group"], y=t["unique"], name="Unique (beyond the others)", marker_color=PALETTE[2],
-                hovertemplate="%{x}<br>Unique: %{y:.1%}<extra></extra>")
+    fig.add_bar(x=t["group"], y=t["alone"], name="On its own", marker_color=PALETTE[0],
+                hovertemplate="%{x}<br>On its own: %{y:.1%} of the differences<extra></extra>")
+    fig.add_bar(x=t["group"], y=t["unique"], name="Only this group (not shared)", marker_color=PALETTE[2],
+                hovertemplate="%{x}<br>Only this group: %{y:.1%} of the differences<extra></extra>")
     fig.update_layout(barmode="group")
-    fig.update_yaxes(title_text="Share of variation in sleep quality", tickformat=".0%", rangemode="tozero")
+    fig.update_yaxes(title_text="Share of the differences in sleep quality", tickformat=".0%", rangemode="tozero")
     return style(fig, 400, title)
 
 
@@ -146,18 +146,18 @@ def category_bars(g, cat, val, title, xtitle, min_n=10, height=420):
     colors = [("#8B5CF6" if n >= min_n else "#4B5675") for n in g["n"]]
     fig = go.Figure(go.Bar(y=g[cat].astype(str), x=g[val], orientation="h", marker=dict(color=colors), customdata=g["n"],
                            text=g[val].round(2), textposition="outside",
-                           hovertemplate="%{y}<br>Mean: %{x:.2f}<br>n = %{customdata}<extra></extra>"))
+                           hovertemplate="%{y}<br>Average: %{x:.2f}<br>People: %{customdata}<extra></extra>"))
     fig.update_xaxes(title_text=xtitle, rangemode="tozero")
     return style(fig, max(height, 60 + 34 * len(g)), title, legend=False)
 
 
 def multi_bars(g, cat, metrics, title):
-    """metrics: [(column, label)] — small multiples of means per category."""
+    """metrics: [(column, label)] — small multiples of averages per category."""
     fig = make_subplots(rows=1, cols=len(metrics), subplot_titles=[m[1] for m in metrics], horizontal_spacing=.09)
     for i, (col, _) in enumerate(metrics, 1):
         fig.add_trace(go.Bar(x=g[cat].astype(str), y=g[col], customdata=g["n"], text=g[col].round(1), textposition="outside",
                              marker_color=PALETTE[(i - 1) % len(PALETTE)],
-                             hovertemplate="%{x}<br>Mean: %{y:.2f}<br>n = %{customdata}<extra></extra>"), row=1, col=i)
+                             hovertemplate="%{x}<br>Average: %{y:.2f}<br>People: %{customdata}<extra></extra>"), row=1, col=i)
     fig.update_yaxes(rangemode="tozero")
     return style(fig, 380, title, legend=False)
 

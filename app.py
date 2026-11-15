@@ -33,7 +33,9 @@ try:
 except Exception:  # never let theming break the app
     pass
 
-SAMPLE = Path(__file__).parent / "data" / "Sleep_health_and_lifestyle_dataset.csv"
+_SAMPLE_NAME = "Sleep_health_and_lifestyle_dataset.csv"
+SAMPLE = next((p for p in (Path(__file__).parent / "data" / _SAMPLE_NAME, Path(__file__).parent / _SAMPLE_NAME) if p.exists()),
+              Path(__file__).parent / "data" / _SAMPLE_NAME)   # bundled Kaggle CSV (data/ folder, or next to app.py)
 PAGES = ["Overview", "Sleep Patterns", "Stress Analysis", "Lifestyle Analysis", "Demographic Insights",
          "Sleep Profiles", "Compare Profiles", "Final Discoveries"]
 CHART_CFG = {"displayModeBar": False}
@@ -57,14 +59,18 @@ def parse_upload(raw: bytes):
 
 
 SPLASH_STEPS = ["Reading your file", "Cleaning and checking columns", "Building sleep profiles"]
+DEMO_STEPS = ["Loading the demo dataset", "Cleaning and checking columns", "Building sleep profiles"]
+FILTER_KEYS = ("age_", "gender_", "occ_", "rep_")       # per-dataset sidebar filter state (see sidebar_filters)
+BOX_NOTE = ("How to read the boxes: the line inside is the middle value, the box holds the middle half of people, "
+            "the thin lines reach the usual range, and any dots are unusual values.")
 
 
-def run_splash(work):
+def run_splash(work, steps=SPLASH_STEPS):
     """Show the branded loading screen while `work()` runs, then for a short moment per remaining step. Errors are re-raised."""
     slot, err, out = st.empty(), None, None
-    for i in range(len(SPLASH_STEPS)):
+    for i in range(len(steps)):
         with slot:
-            theme.loading_screen(i, SPLASH_STEPS)
+            theme.loading_screen(i, steps)
         if i == 0:
             try:
                 out = work()
@@ -99,36 +105,53 @@ def ingest(up) -> None:
     set_dataset(raw, up.name)
 
 
-def set_dataset(raw: bytes, name: str) -> None:
-    st.session_state.update(raw=raw, name=name, ds_id=hashlib.md5(raw).hexdigest()[:10])
+def set_dataset(raw: bytes, name: str, demo: bool = False) -> None:
+    st.session_state.update(raw=raw, name=name, ds_id=hashlib.md5(raw).hexdigest()[:10], demo=demo)
     st.session_state.pop("upload_error", None)
 
 
-def use_sample() -> None:
-    set_dataset(SAMPLE.read_bytes(), SAMPLE.name)
-    st.session_state["_splash"] = True
+def launch_demo() -> None:
+    """One click: load the bundled real dataset, hide repeated records, and open the Overview page."""
+    set_dataset(SAMPLE.read_bytes(), SAMPLE.name, demo=True)
+    ds = st.session_state["ds_id"]
+    for p in FILTER_KEYS:
+        st.session_state.pop(f"{p}{ds}", None)           # start from the default age / gender / occupation filters...
+    st.session_state[f"rep_{ds}"] = True                 # ...plus the demo filter: exclude repeated profiles
+    st.session_state.update(page="Overview", _splash=True)
+
+
+def exit_demo() -> None:
+    """Leave the demo and return to the landing page (clears the dataset, filters and page choice)."""
+    drop = [k for k in st.session_state if k.startswith(FILTER_KEYS)
+            or k in ("raw", "name", "ds_id", "demo", "page", "last_sig", "upload_error", "_splash")]
+    for k in drop:
+        st.session_state.pop(k, None)
 
 
 def landing() -> None:
     theme.hero_pro("What really shapes how well we sleep?",
                    "What matters more for sleep quality — stress, physical activity, or lifestyle? "
-                   "Upload the Sleep Health & Lifestyle dataset and let the data answer.",
+                   "Launch the demo to see the answer in one click, or upload the Sleep Health & Lifestyle dataset and let the data answer.",
                    [(str(len(PAGES)), "analysis pages"), ("2", "profile tools"), ("100%", "calculated from your file")])
     _, mid, _ = st.columns([1, 3, 1])
     with mid:
+        if SAMPLE.exists():
+            st.button("▶  Launch Demo", type="primary", on_click=launch_demo, key="launch_demo")
+            theme.note("One click · uses the real Kaggle sleep dataset · no upload needed · exit any time")
+            theme.divider_or("or use your own data")
+        else:
+            st.caption("The demo dataset wasn't found in the data/ folder. You can still upload your own CSV below.")
         up = st.file_uploader("Drop your CSV here", type=["csv"], key="main_up",
                               help="Kaggle: Sleep Health and Lifestyle Dataset (Sleep_health_and_lifestyle_dataset.csv)")
         ingest(up)
         if st.session_state.get("upload_error"):
             theme.callout(esc(st.session_state["upload_error"]), "We couldn't use that file", "error")
-        if SAMPLE.exists():
-            st.button("Or explore the bundled Kaggle dataset →", on_click=use_sample)
     if "raw" in st.session_state:
         st.rerun()
-    theme.steps([("Upload", "Add the Kaggle CSV. Column names are matched flexibly and messy values are cleaned."),
-                 ("Explore", "Filter by age, gender and occupation — every metric and chart updates."),
-                 ("Discover", "Read findings that are calculated from your data, with their limitations.")])
-    theme.section("Expected columns", "Required columns are marked; the rest unlock extra charts.")
+    theme.steps([("Start", "Launch the demo, or upload the Kaggle CSV. Column names are matched flexibly and messy values are tidied up."),
+                 ("Explore", "Filter by age, gender and occupation — every number and chart updates."),
+                 ("Discover", "Read findings worked out from the data, along with what they can't tell you.")])
+    theme.section("Expected columns", "● marks a required column; ○ columns are optional and unlock extra charts.")
     req = set(sd.REQUIRED)
     theme.chips([("● " if c in req else "○ ") + c for c in sd.ALIASES if c != "Person ID"])
 
@@ -169,14 +192,43 @@ def sidebar_filters(df_all):
     theme.spacer(10)
     n_rep = int(df_all["Repeat Profile"].sum())
     rep = st.toggle("Exclude repeated profiles", key=f"rep_{ds}",
-                    help=f"{n_rep:,} records are identical to an earlier one on every column except Person ID. "
-                         "Switch this on to test whether the findings still hold without them.")
+                    help=f"{n_rep:,} records are exactly the same as an earlier one in every column except Person ID. "
+                         "Switch this on to check whether the findings still hold without them.")
     theme.spacer(6)
     st.button("Reset filters", on_click=reset_filters, args=(ds, (amin, amax), genders))
     return sd.apply_filters(df_all, age, g, o or occs, rep)
 
 
 # --------------------------------------------------------------------------- pages
+def demo_banner(df, df_all) -> None:
+    """Strip shown only in demo mode: says what is loaded and which filter is on, with an easy way out."""
+    n_rep = int(df_all["Repeat Profile"].sum())
+    if st.session_state.get(f"rep_{st.session_state['ds_id']}"):
+        msg = (f"You're exploring the <b>real Sleep Health &amp; Lifestyle dataset</b>. "
+               f"{n_rep:,} records that are exact copies of another (apart from Person ID) are hidden, leaving "
+               f"<b>{len(df):,} of {len(df_all):,}</b> people in view. Change any filter in the sidebar — "
+               "or switch off “Exclude repeated profiles” to see everyone.")
+    else:
+        msg = (f"You're exploring the <b>real Sleep Health &amp; Lifestyle dataset</b> with "
+               f"<b>{len(df):,} of {len(df_all):,}</b> people in view. Use the sidebar filters to slice it any way you like.")
+    c1, c2 = st.columns([5, 1], vertical_alignment="center")
+    with c1:
+        theme.callout(msg, "Demo mode", "good")
+    with c2:
+        st.button("✕ Exit demo", on_click=exit_demo, key="exit_demo_main")
+
+
+def signed(r: float) -> str:
+    return sd.fmt_r(r)
+
+
+def group_table(g) -> None:
+    t = g.rename(columns={"n": "Participants", "duration": "Avg sleep (h)", "quality": "Avg quality (out of 10)",
+                          "stress": "Avg stress (out of 10)", "activity": "Avg activity (min/day)"})
+    t["Participants"] = t["Participants"].astype(int)
+    theme.table(t)
+
+
 def go_final():
     st.session_state["page"] = "Final Discoveries"
 
@@ -191,21 +243,21 @@ def page_overview(df, df_all, report):
              (f"{df[TARGET].mean():.1f} / 10", "average sleep quality")]
     if contrib:
         lead = contrib["table"].sort_values("alone", ascending=False).iloc[0]
-        stats.append((f"{lead.alone:.0%}", f"of sleep-quality variation explained by {lead.group.lower()} alone"))
+        stats.append((f"{lead.alone:.0%}", f"of the differences in sleep quality explained by {lead.group.lower()} alone"))
     theme.hero_pro("What really shapes how well we sleep?",
                    "What matters more for sleep quality — stress, physical activity, or lifestyle?", stats)
     theme.kpi_grid([
-        ("Avg sleep duration", f"{df[DURATION].mean():.2f} h", f"median {df[DURATION].median():.1f} h", "clock", df[DURATION]),
-        ("Avg sleep quality", f"{df[TARGET].mean():.2f} / 10", f"median {df[TARGET].median():.0f}", "sleep", df[TARGET]),
-        ("Avg stress level", f"{df[STRESS].mean():.2f} / 10", f"median {df[STRESS].median():.0f}", "stress", df[STRESS]),
-        ("Avg physical activity", f"{df[ACTIVITY].mean():.0f} min/day", f"median {df[ACTIVITY].median():.0f}", "bolt", df[ACTIVITY]),
+        ("Avg sleep duration", f"{df[DURATION].mean():.2f} h", f"middle value {df[DURATION].median():.1f} h", "clock", df[DURATION]),
+        ("Avg sleep quality", f"{df[TARGET].mean():.2f} / 10", f"middle value {df[TARGET].median():.0f}", "sleep", df[TARGET]),
+        ("Avg stress level", f"{df[STRESS].mean():.2f} / 10", f"middle value {df[STRESS].median():.0f}", "stress", df[STRESS]),
+        ("Avg physical activity", f"{df[ACTIVITY].mean():.0f} min/day", f"middle value {df[ACTIVITY].median():.0f}", "bolt", df[ACTIVITY]),
     ])
 
-    theme.section("Most interesting findings", "Calculated live from the current filters — associations, not causes.")
+    theme.section("Most interesting findings", "Worked out live from your current filters. They show what goes together, not what causes what.")
     theme.finding_cards(sd.build_findings(df, contrib)[:3])
 
     if contrib:
-        theme.section("The research question", "Share of sleep-quality variation each group explains.")
+        theme.section("The research question", "How much of the differences in sleep quality each group accounts for.")
         c1, c2 = st.columns([3, 2])
         with c1:
             theme.suspects(contrib["table"])
@@ -223,40 +275,43 @@ def page_overview(df, df_all, report):
             f"<b>{n:,}</b> participants · <b>{df_all['Occupation'].nunique()}</b> occupations · ages "
             f"<b>{int(df_all['Age'].min())}–{int(df_all['Age'].max())}</b>",
             f"Source: <b>{esc(st.session_state.get('name', 'uploaded file'))}</b>",
-            "Measures: sleep duration &amp; quality, stress, activity, BMI, blood pressure, heart rate, steps, sleep disorder",
+            "Measures: sleep duration &amp; quality, stress, activity, BMI, blood pressure, heart rate, daily steps, sleep disorder",
             "Every figure on this site is calculated from this file — nothing is simulated.",
         ]))
     with c2:
         notes = [f"<b>{report['repeat_profiles']:,}</b> repeated profiles ({report['repeat_profiles'] / n:.0%}) — "
-                 "identical on every column except Person ID"]
+                 "exactly the same as another record in every column except Person ID"]
         notes.append("Missing values: " + (", ".join(f"{esc(k)} ({v})" for k, v in report["missing"].items()) or "none found"))
         if report["dropped_rows"]:
-            notes.append(f"{report['dropped_rows']} rows dropped for missing core values")
+            notes.append(f"{report['dropped_rows']} rows dropped because key values were missing")
         if report["out_of_range"]:
-            notes.append("Out-of-range values removed: " + ", ".join(f"{esc(k)} ({v})" for k, v in report["out_of_range"].items()))
+            notes.append("Impossible values removed: " + ", ".join(f"{esc(k)} ({v})" for k, v in report["out_of_range"].items()))
         if report["optional_missing"]:
             notes.append("Not in file: " + esc(", ".join(report["optional_missing"])))
         theme.card("Data quality", theme.bullets(notes))
 
-    theme.section("The big picture", "How every measure relates to every other (rank correlation, −1 to +1).")
+    theme.section("The big picture", "How every measure lines up with every other. Scores run from −1 (one goes up as the other goes down) "
+                  "to +1 (they rise together); 0 means no link.")
     left, right = st.columns([3, 2])
     with left:
         if len(df) >= 3:
-            show(viz.corr_heatmap(sd.correlation_matrix(df), "Correlation map"), "ov_corr")
+            show(viz.corr_heatmap(sd.correlation_matrix(df), "How the measures connect"), "ov_corr")
     with right:
         drivers = sd.driver_table(df)
         if not drivers.empty:
             show(viz.driver_bar(drivers, "What moves sleep quality?"), "ov_driver")
+            st.caption("↑ higher values go with better sleep · ↓ higher values go with worse sleep · “by group” = a category, such as occupation.")
     if not drivers.empty:
         top = drivers.iloc[0]
-        theme.callout(f"In the current view, <b>{esc(top['Factor'])}</b> has the strongest association with sleep quality "
-                      f"(strength {top['strength']:.2f}). Association is not cause — see <b>Final Discoveries</b> for the full comparison "
-                      "of stress, activity and lifestyle.")
+        theme.callout(f"In the current view, <b>{esc(top['Factor'])}</b> lines up most closely with sleep quality "
+                      f"(score {top['strength']:.2f} out of 1). That is a link, not proof of cause — see <b>Final Discoveries</b> "
+                      "for the full comparison of stress, activity and lifestyle.")
         pairs = [("stress", sd.spearman(df[STRESS], df[TARGET])), ("physical activity", sd.spearman(df[ACTIVITY], df[TARGET]))]
         link = sd.spearman(df[STRESS], df[ACTIVITY])
         if all(not np.isnan(p[1]) for p in pairs) and not np.isnan(link):
-            theme.callout(f"Sleep quality vs. <b>stress</b>: ρ = {pairs[0][1]:.2f}. vs. <b>physical activity</b>: ρ = {pairs[1][1]:.2f}. "
-                          f"Stress and activity are themselves linked (ρ = {link:.2f}), which is why their separate roles are hard to untangle.",
+            theme.callout(f"Link with sleep quality: <b>stress</b> {signed(pairs[0][1])}, <b>physical activity</b> {signed(pairs[1][1])}. "
+                          f"Stress and physical activity are also linked to each other (score {signed(link)}), "
+                          "which makes it hard to tell their separate roles apart.",
                           "How the factors connect")
 
 
@@ -269,38 +324,38 @@ def page_sleep(df):
         show(viz.count_bar(df, TARGET, "Sleep quality distribution"), "sp_q")
     short = (df[DURATION] < 7).mean()
     good = (df[TARGET] >= 8).mean()
-    theme.callout(f"Average sleep is <b>{df[DURATION].mean():.2f} h</b> (median {df[DURATION].median():.1f}, "
-                  f"SD {df[DURATION].std():.2f}). <b>{short:.0%}</b> sleep under 7 hours, the minimum commonly recommended for adults, "
+    theme.callout(f"The average person sleeps <b>{df[DURATION].mean():.2f} hours</b> (the person in the middle sleeps "
+                  f"{df[DURATION].median():.1f}). <b>{short:.0%}</b> sleep under 7 hours, the minimum commonly recommended for adults, "
                   f"and <b>{good:.0%}</b> rate their sleep quality 8 or higher.")
 
-    theme.section("Duration × quality", "Do longer sleepers rate their sleep higher?")
-    view = st.radio("View", ["Scatter", "Box plot by quality score"], horizontal=True, label_visibility="collapsed", key="sp_view")
+    theme.section("Sleep length and sleep quality", "Do longer sleepers rate their sleep higher?")
+    view = st.radio("View", ["Dot chart", "Ranges by quality score"], horizontal=True, label_visibility="collapsed", key="sp_view")
     color_opts = [c for c in ["Gender", "BMI Category", "Sleep Disorder", "Age Group"] if c in df.columns]
-    if view == "Scatter":
+    if view == "Dot chart":
         color = st.selectbox("Colour by", color_opts, key="sp_color")
         show(viz.scatter(df, DURATION, TARGET, color=color, jx=0.04, jy=0.15, hover=["Occupation", "Age"],
                          title="Sleep duration vs. quality"), "sp_scatter")
-        st.caption("Points are nudged slightly so overlapping ratings stay visible; hover shows the true values.")
+        st.caption("Dots are nudged slightly so overlapping ones stay visible. Hover over a dot to see its exact values.")
     else:
         d = df.copy()
         d[TARGET] = d[TARGET].round().astype(int)
         show(viz.box(d, TARGET, DURATION, "Sleep duration for each quality score", order=sorted(d[TARGET].unique())), "sp_box")
+        st.caption(BOX_NOTE)
     r = sd.spearman(df[DURATION], df[TARGET])
     if not np.isnan(r):
-        theme.callout(f"Sleep duration and sleep quality show a <b>{sd.strength(r)}</b> {'positive' if r > 0 else 'negative'} association "
-                      f"(Spearman ρ = {r:.2f}). Longer sleep tends to go along with higher ratings, but both are self-reported "
-                      "and can reflect the same underlying factors.")
+        theme.callout(f"{sd.plain_link('sleep duration', 'sleep quality', r)}. Both are probably self-reported, "
+                      "and both can be shaped by the same things, such as stress or health.")
 
 
 def page_stress(df):
     theme.page_header("Stress Analysis", "Is higher stress linked to worse sleep? Everything below is computed from the filtered data.", eyebrow="Explore · Stress")
     r = sd.spearman(df[STRESS], df[TARGET])
     gap = sd.extreme_gap(df, STRESS)
-    kp = [("Rank correlation (ρ)", "n/a" if np.isnan(r) else f"{r:.2f}", "stress vs. sleep quality" if np.isnan(r) else sd.strength(r) + " association")]
+    kp = [("Stress–sleep link score", "n/a" if np.isnan(r) else signed(r), "stress vs. sleep quality" if np.isnan(r) else sd.link_label(r))]
     if gap:
-        kp += [("Low-stress group", f"{gap['low_mean']:.1f} / 10", f"stress ≤ {gap['lo']:.0f} · n = {gap['n_low']}"),
-               ("High-stress group", f"{gap['high_mean']:.1f} / 10", f"stress ≥ {gap['hi']:.0f} · n = {gap['n_high']}"),
-               ("Quality gap", f"{gap['low_mean'] - gap['high_mean']:+.1f}", "low minus high stress")]
+        kp += [("Low-stress group", f"{gap['low_mean']:.1f} / 10", f"stress {gap['lo']:.0f} or below · {gap['n_low']} people"),
+               ("High-stress group", f"{gap['high_mean']:.1f} / 10", f"stress {gap['hi']:.0f} or above · {gap['n_high']} people"),
+               ("Quality gap", f"{gap['low_mean'] - gap['high_mean']:+.1f}", "low-stress minus high-stress group")]
     theme.kpi_grid(kp)
 
     c1, c2 = st.columns([3, 2])
@@ -314,23 +369,22 @@ def page_stress(df):
         g.columns = ["stress", "mean", "n"]
         st.write("")
         st.write("")
-        show(viz.mean_bars(g, "stress", "mean", "n", "Average sleep quality by stress level", "Mean sleep quality"), "st_means")
+        show(viz.mean_bars(g, "stress", "mean", "n", "Average sleep quality by stress level", "Average sleep quality"), "st_means")
     if not np.isnan(r):
-        text = (f"Across {len(df):,} people, stress and sleep quality move in {'opposite directions' if r < 0 else 'the same direction'} "
-                f"(ρ = {r:.2f}, <b>{sd.strength(r)}</b>).")
+        text = f"{sd.plain_link('stress', 'sleep quality', r)}, across the {len(df):,} people in view."
         if gap:
-            text += (f" People at the low end of stress (≤ {gap['lo']:.0f}) average <b>{gap['low_mean']:.1f}</b>/10 sleep quality; "
-                     f"those at the high end (≥ {gap['hi']:.0f}) average <b>{gap['high_mean']:.1f}</b>/10.")
-        theme.callout(text + " Points are nudged slightly for readability; the dashed line is a simple linear trend.")
+            text += (f" People at the low end of stress (level {gap['lo']:.0f} or below) average <b>{gap['low_mean']:.1f}</b>/10 sleep quality; "
+                     f"those at the high end (level {gap['hi']:.0f} or above) average <b>{gap['high_mean']:.1f}</b>/10.")
+        theme.callout(text + " Dots are nudged slightly for readability; the dashed line shows the overall trend.")
 
-    theme.section("Where people cluster", "Number of participants at each stress × quality combination.")
+    theme.section("Where people cluster", "How many people fall at each combination of stress level and sleep-quality score.")
     show(viz.heatmap_counts(df.assign(**{TARGET: df[TARGET].round().astype(int), STRESS: df[STRESS].round().astype(int)}),
                             STRESS, TARGET, "Participants by stress level and sleep quality"), "st_heat")
     if have(df, "Heart Rate"):
         rh = sd.spearman(df[STRESS], df["Heart Rate"])
         if not np.isnan(rh):
-            theme.callout(f"Stress also tracks with resting heart rate (ρ = {rh:.2f}), so stress overlaps with physiological factors — "
-                          "one reason its separate effect on sleep is hard to isolate.", "A related pattern")
+            theme.callout(f"Stress is also linked to heart rate (score {signed(rh)}), so stress overlaps with body measures — "
+                          "one reason it is hard to pin down what stress alone does to sleep.", "A related pattern")
 
 
 def page_lifestyle(df):
@@ -346,12 +400,11 @@ def page_lifestyle(df):
         bm = sd.bin_means(df, ACTIVITY, TARGET)
         with c2:
             if not bm.empty:
-                show(viz.mean_bars(bm, "label", "mean", "n", "Sleep quality by activity quartile", "Mean sleep quality"), "lf_act_bins")
+                show(viz.mean_bars(bm, "label", "mean", "n", "Sleep quality by activity level (four equal-sized groups)", "Average sleep quality"), "lf_act_bins")
         if not np.isnan(r):
-            shape = f" Across activity quartiles, average quality <b>{sd._trend_word(bm['mean'])}</b>." if len(bm) >= 3 else ""
-            theme.callout(f"Physical activity (minutes/day) and sleep quality show a <b>{sd.strength(r)}</b> association "
-                          f"(ρ = {r:.2f}).{shape} More active people may sleep differently for reasons unrelated to exercise itself "
-                          "(age, job, health), so this does not show that activity changes sleep.")
+            shape = f" Splitting people into four equal-sized groups by activity, average sleep quality <b>{sd._trend_word(bm['mean'])}</b>." if len(bm) >= 3 else ""
+            theme.callout(f"{sd.plain_link('physical activity', 'sleep quality', r)} (activity is measured in minutes per day).{shape} "
+                          "More active people may also differ in other ways (age, job, health), so this does not show that exercise changes sleep.")
 
     with tabs[1]:
         if have(df, "Daily Steps"):
@@ -363,9 +416,9 @@ def page_lifestyle(df):
             bm = sd.bin_means(df, "Daily Steps", DURATION)
             with c2:
                 if not bm.empty:
-                    show(viz.mean_bars(bm, "label", "mean", "n", "Sleep duration by steps quartile", "Mean sleep (hours)"), "lf_steps_bins")
+                    show(viz.mean_bars(bm, "label", "mean", "n", "Sleep duration by daily steps (four equal-sized groups)", "Average sleep (hours)"), "lf_steps_bins")
             if not np.isnan(r):
-                theme.callout(f"Daily steps and sleep duration show a <b>{sd.strength(r)}</b> association (ρ = {r:.2f}). "
+                theme.callout(f"{sd.plain_link('daily steps', 'sleep duration', r)}. "
                               "Step counts and sleep hours are both shaped by work schedules and routines, so any link may be indirect.")
         else:
             theme.callout("This file has no <b>Daily Steps</b> column, so this chart is unavailable.", "Missing column", "warn")
@@ -379,15 +432,15 @@ def page_lifestyle(df):
                 show(viz.box(d, "BMI Category", TARGET, "Sleep quality by BMI category", order), "lf_bmi_q")
             with c2:
                 show(viz.box(d, "BMI Category", DURATION, "Sleep duration by BMI category", order), "lf_bmi_d")
+            st.caption(BOX_NOTE)
             g = sd.group_summary(d, "BMI Category")
             g["BMI Category"] = g["BMI Category"].astype(str)
             g = g.set_index("BMI Category").reindex(order).reset_index()
-            st.dataframe(g.rename(columns={"n": "Participants", "duration": "Avg sleep (h)", "quality": "Avg quality",
-                                           "stress": "Avg stress", "activity": "Avg activity"}).round(2), hide_index=True)
-            small = [f"{esc(r['BMI Category'])} (n = {int(r['n'])})" for _, r in g.iterrows() if r["n"] < 20]
-            theme.callout("BMI groups differ in size" + (f"; small groups: {', '.join(small)}" if small else "")
-                          + ". Differences in averages between groups are descriptive and, for small groups, unstable. "
-                          "BMI is also related to age and health conditions, which are not controlled for here.")
+            group_table(g)
+            small = [f"{esc(r['BMI Category'])} ({int(r['n'])} people)" for _, r in g.iterrows() if r["n"] < 20]
+            theme.callout("The BMI groups are different sizes" + (f"; small groups: {', '.join(small)}" if small else "")
+                          + ". The averages only describe each group, and for small groups they can be shaky. "
+                          "BMI also goes along with age and health conditions, which this site does not adjust for.")
         else:
             theme.callout("This file has no <b>BMI Category</b> column, so this comparison is unavailable.", "Missing column", "warn")
 
@@ -399,8 +452,8 @@ def page_demographics(df):
     with tabs[0]:
         g = sd.group_summary(df, "Occupation")
         metric = st.radio("Metric", ["Sleep quality", "Sleep duration", "Stress level"], horizontal=True, key="dm_metric")
-        col, label = {"Sleep quality": ("quality", "Mean sleep quality"), "Sleep duration": ("duration", "Mean sleep (h)"),
-                      "Stress level": ("stress", "Mean stress")}[metric]
+        col, label = {"Sleep quality": ("quality", "Average sleep quality"), "Sleep duration": ("duration", "Average sleep (h)"),
+                      "Stress level": ("stress", "Average stress")}[metric]
         show(viz.category_bars(g, "Occupation", col, f"{metric} by occupation", label), "dm_occ")
         big = g[g["n"] >= 10]
         if len(big) >= 2:
@@ -415,9 +468,10 @@ def page_demographics(df):
         g = sd.group_summary(df, "Age Group")
         show(viz.multi_bars(g, "Age Group", [("duration", "Sleep (h)"), ("quality", "Quality (1–10)"), ("stress", "Stress (1–10)")],
                             "Averages by age group"), "dm_age")
-        small = [f"{r['Age Group']} (n = {int(r['n'])})" for _, r in g.iterrows() if r["n"] < 20]
-        theme.callout("Age groups are bands of the Age column. Older groups tend to differ in occupation and health, so age differences "
-                      "may partly reflect who is in each group." + (f" Small groups: {esc(', '.join(small))}." if small else ""))
+        small = [f"{r['Age Group']} ({int(r['n'])} people)" for _, r in g.iterrows() if r["n"] < 20]
+        theme.callout("Age groups are simple age bands (under 30, 30–39, 40–49 and 50+). Older and younger groups may also differ in "
+                      "their jobs and health, so age differences may partly reflect who is in each group."
+                      + (f" Small groups: {esc(', '.join(small))}." if small else ""))
 
     with tabs[2]:
         if df["Gender"].nunique() < 2:
@@ -428,11 +482,10 @@ def page_demographics(df):
                 show(viz.box(df, "Gender", TARGET, "Sleep quality by gender"), "dm_g_q")
             with c2:
                 show(viz.box(df, "Gender", DURATION, "Sleep duration by gender"), "dm_g_d")
-            g = sd.group_summary(df, "Gender")
-            st.dataframe(g.rename(columns={"n": "Participants", "duration": "Avg sleep (h)", "quality": "Avg quality",
-                                           "stress": "Avg stress", "activity": "Avg activity"}).round(2), hide_index=True)
-            theme.callout("Gender groups can differ in occupation mix and age as well, so gaps shown here are descriptive and do not "
-                          "isolate an effect of gender.")
+            st.caption(BOX_NOTE)
+            group_table(sd.group_summary(df, "Gender"))
+            theme.callout("Men and women in this data may also differ in their jobs and ages, so any gap here only describes the groups — "
+                          "it can't be put down to gender itself.")
 
 
 def _profile_lookup(df):
@@ -445,7 +498,7 @@ def _profile_lookup(df):
 
 
 def page_profiles(df):
-    theme.page_header("Sleep Profiles", "Groups of people who stand out in this dataset — defined by the data’s own quartiles and compared with everyone else.",
+    theme.page_header("Sleep Profiles", "Groups of people who stand out in this data, compared with everyone else. Each group is defined from the data itself — for example, the quarter of people with the highest stress.",
                       eyebrow="Discover · Profiles")
     profs, metrics, masks = _profile_lookup(df)
     if not profs:
@@ -462,7 +515,7 @@ def page_profiles(df):
                      columns=["profile", "value", "n"])
     show(viz.category_bars(g, "profile", "value", f"Average {label.lower()} by profile", f"{label}{unit}", min_n=8), "pf_bars")
 
-    theme.section("Profile cards", "Each card compares the group with everyone outside it. The three biggest differences on measures that did not define the group are described.")
+    theme.section("Profile cards", "Each card compares a group with everyone else and points out up to three of the biggest differences on measures that weren't used to define the group.")
     cards = []
     for p in profs:
         s = sums[p["name"]]
@@ -478,8 +531,8 @@ def page_profiles(df):
         cards.append(dict(name=p["name"], rule=p["rule"], n_text=f"{s['n']} people · {s['share']:.0%}", stats=stats,
                           body=body, meta=" · ".join(meta)))
     theme.profile_cards(cards)
-    theme.callout("Profiles overlap (one person can belong to several) and are defined from this sample, so they describe who stands out here — "
-                  "not why. <b>These are associations; correlation does not prove causation.</b> Small groups deserve extra caution.",
+    theme.callout("One person can belong to several profiles, and the profiles come from this data, so they describe who stands out here — "
+                  "not why. <b>They show what goes together, not what causes what.</b> Small groups can be unreliable.",
                   "How to read profiles", "good")
     st.button("Compare two profiles →", on_click=lambda: st.session_state.update(page="Compare Profiles"), key="pf_to_cmp")
 
@@ -509,7 +562,7 @@ def page_compare(df):
     theme.kpi_grid([(f"A · {na}", f"{int(ma.sum()):,} people", rule[na], "people"),
                     (f"B · {nb}", f"{int(mb.sum()):,} people", rule[nb], "people")])
 
-    theme.section("Side by side", "Average per profile; effect size is Cohen’s d (difference ÷ pooled spread).")
+    theme.section("Side by side", "The average for each profile. “Size of difference” says whether the gap is tiny or large compared with how much people vary within the groups.")
     theme.compare_table(rows, na, nb)
     theme.spacer(10)
     show(viz.compare_bars(rows, na, nb, "Profile averages"), "cp_bars")
@@ -520,15 +573,15 @@ def page_compare(df):
         top = ranked.iloc[0]
         hi = na if top["diff"] > 0 else nb
         notes = [f"The largest difference is in <b>{esc(top['label'].lower())}</b>: {esc(na)} averages {top['a']:.{int(top['dec'])}f}{esc(top['unit'])} "
-                 f"vs {top['b']:.{int(top['dec'])}f}{esc(top['unit'])} for {esc(nb)} ({sd.effect_word(top['d'])} effect, higher for {esc(hi)})."]
+                 f"vs {top['b']:.{int(top['dec'])}f}{esc(top['unit'])} for {esc(nb)} (a {sd.effect_word(top['d'])} gap, higher for {esc(hi)})."]
         small = [r.label.lower() for r in ranked.itertuples() if r.abs_d < 0.2]
         if small:
-            notes.append("Negligible differences: " + ", ".join(esc(x) for x in small) + ".")
+            notes.append("Almost no difference in: " + ", ".join(esc(x) for x in small) + ".")
         if both:
-            notes.append(f"<b>{both:,}</b> people belong to both profiles, so the groups are not fully independent.")
+            notes.append(f"<b>{both:,}</b> people belong to both profiles, so the two groups overlap.")
         theme.callout(theme.bullets(notes), "What stands out")
-    theme.callout("Differences between profiles are <b>associations in this sample</b>. They do not show that stress, activity or any other trait "
-                  "causes better or worse sleep. Groups are not matched on age, occupation or other factors.", "Interpretation", "good")
+    theme.callout("These differences show what goes together in this data. They do <b>not</b> show that stress, activity or any other trait "
+                  "causes better or worse sleep. The groups are not matched on age, occupation or other factors.", "How to read this", "good")
 
 
 def page_final(df, df_all, report):
@@ -538,7 +591,7 @@ def page_final(df, df_all, report):
     if contrib:
         v1, v2 = st.columns([2, 3])
         with v1:
-            theme.suspects(contrib["table"], "The verdict", "Share of sleep-quality variation explained on its own")
+            theme.suspects(contrib["table"], "The verdict", "How much of the differences in sleep quality each group accounts for on its own")
         with v2:
             theme.card("In one line", sd.headline(contrib))
     theme.finding_cards(findings)
@@ -547,15 +600,15 @@ def page_final(df, df_all, report):
     drivers = sd.driver_table(df)
     with c1:
         if not drivers.empty:
-            show(viz.driver_bar(drivers, "Strength of association with sleep quality"), "fd_driver")
+            show(viz.driver_bar(drivers, "How closely each factor lines up with sleep quality"), "fd_driver")
     with c2:
         if contrib:
-            show(viz.contribution_bar(contrib["table"], "How much each group explains"), "fd_contrib")
+            show(viz.contribution_bar(contrib["table"], "How much each group accounts for"), "fd_contrib")
     if contrib:
         defs = "; ".join(f"<b>{esc(r.group)}</b> = {esc(r.factors)}" for r in contrib["table"].itertuples())
-        theme.callout(f"Groups: {defs}. “On its own” is the R² of a linear model using only that group; “unique” is how much R² drops when "
-                      "the group is removed from the full model. When the factors are correlated with each other, unique shares are smaller "
-                      "than stand-alone shares.", "How to read these")
+        theme.callout(f"Groups: {defs}. “On its own” is how much of the differences in sleep quality a group could account for if it were "
+                      "the only thing we knew. “Only this group” is how much would be lost if we took that group away but kept the other two. "
+                      "When the groups overlap, “only this group” is smaller than “on its own”.", "How to read these")
 
     nr = df[~df["Repeat Profile"]]
     if contrib and report["repeat_profiles"] and len(nr) != len(df) and len(nr) >= 30:
@@ -563,16 +616,28 @@ def page_final(df, df_all, report):
         if c2:
             t = c2["table"].sort_values("alone", ascending=False)
             parts = ", ".join(f"{esc(r.group)} {r.alone:.0%}" for r in t.itertuples())
-            theme.callout(f"Without the repeated profiles (n = {len(nr):,} of {len(df):,}), the stand-alone shares are: {parts}. "
+            theme.callout(f"Without the repeated profiles ({len(nr):,} of {len(df):,} people), the “on its own” shares are: {parts}. "
                           f"{sd.same_leader(contrib, c2)}", "Robustness check", "good")
 
     theme.section("What the data suggests")
-    theme.callout("Findings above describe <b>associations in this sample</b>. They show which measures line up most closely with sleep "
-                  "quality, not what would happen if someone changed their stress or activity. <b>Correlation does not prove causation.</b>",
-                  "Interpretation", "good")
+    theme.callout("The findings above describe <b>what goes together in this sample</b>. They show which measures line up most closely "
+                  "with sleep quality, not what would happen if someone changed their stress or activity. <b>A link is not proof of cause.</b> "
+                  "Link scores run from −1 to +1: the closer to either end, the stronger the link; 0 means no link.",
+                  "How to read this", "good")
 
     theme.section("Limitations")
     theme.callout(theme.bullets(sd.limitations(report, df_all, df)), "Keep in mind", "warn")
+
+    with st.expander("How these numbers are calculated (technical notes)"):
+        st.markdown(
+            "- **Link score** = Spearman rank correlation (ρ), from −1 to +1. For categories such as occupation or gender we use the "
+            "correlation ratio (η), from 0 to 1, so those bars have no direction.\n"
+            "- **“Accounts for”** = the R² of a linear model for sleep quality, using each group alone (“on its own”) and the drop in R² when "
+            "the group is removed from the full model (“only this group”). Lifestyle = daily steps, BMI category and heart rate.\n"
+            "- **Size of difference** (Compare Profiles) = Cohen’s d, the gap between two averages divided by their pooled standard deviation. "
+            "Under 0.2 is called tiny, 0.2–0.5 small, 0.5–0.8 medium, above 0.8 large. Hover over a label to see the exact value.\n"
+            "- **Repeated profiles** are records identical on every column except Person ID.\n"
+            "- **Equal-sized groups** are quartiles. **Dots** in scatter charts are jittered for display only; hover shows true values.")
 
     theme.section("Take the data with you")
     st.download_button("Download filtered dataset (CSV)", data=export_csv(df), file_name="somnia_filtered.csv",
@@ -589,8 +654,10 @@ def main():
     with st.sidebar:
         theme.brand()
         if "raw" not in st.session_state:
-            st.caption("Upload the data to unlock the dashboard. (.csv)")
+            st.caption("Launch the demo or upload a CSV to unlock the dashboard.")
         else:
+            if st.session_state.get("demo"):
+                st.button("✕ Exit demo", on_click=exit_demo, key="exit_demo_side", help="Leave the demo and return to the start page")
             theme.side_label("Workspace")
             theme.spacer(4)
             page = st.radio("Navigate", PAGES, key="page", label_visibility="collapsed")
@@ -609,7 +676,7 @@ def main():
 
     try:
         if st.session_state.pop("_splash", False):
-            run_splash(lambda: parse_upload(st.session_state["raw"]))
+            run_splash(lambda: parse_upload(st.session_state["raw"]), DEMO_STEPS)
         df_all, report = parse_upload(st.session_state["raw"])
     except sd.DataError as exc:  # should not happen (validated on upload) but never crash
         st.session_state.pop("raw")
@@ -630,6 +697,8 @@ def main():
     if err:
         theme.callout(esc(err) + " The previous dataset is still loaded.", "The new file couldn't be used", "error")
 
+    if st.session_state.get("demo"):
+        demo_banner(df, df_all)
     theme.chips([f"{len(df):,} of {len(df_all):,} participants in view"])
     if df.empty:
         theme.callout("No records match the current filters. Select at least one gender, widen the age range, "

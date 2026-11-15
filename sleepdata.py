@@ -192,6 +192,25 @@ def strength(r: float) -> str:
             else "strong" if a < 0.7 else "very strong")
 
 
+def link_label(r: float) -> str:
+    """Short everyday label for the size of a correlation, e.g. 'strong link' or 'barely any link'."""
+    s = strength(r)
+    return "barely any link" if s == "negligible" else f"{s} link"
+
+
+def fmt_r(r: float) -> str:
+    """Signed score with a true minus sign, e.g. −0.91 / +0.42."""
+    return f"{r:+.2f}".replace("-", "−")
+
+
+def plain_link(a: str, b: str, r: float) -> str:
+    """One everyday sentence (HTML) describing the link between measures `a` and `b` (lower-case names)."""
+    if strength(r) == "negligible":
+        return f"{a[0].upper() + a[1:]} and {b} show barely any link (score {fmt_r(r)})"
+    return (f"Higher {a} tends to go with {'lower' if r < 0 else 'higher'} {b} — a <b>{strength(r)}</b> link "
+            f"(score {fmt_r(r)})")
+
+
 def eta(cat: pd.Series, y: pd.Series) -> float:
     """Correlation ratio: how much of y's variance sits between categories (0-1)."""
     d = pd.concat([cat.rename("c"), y.rename("y")], axis=1).dropna()
@@ -208,12 +227,12 @@ def correlation_matrix(df, cols=None):
     cols = cols or [c for c in ["Sleep Duration", "Quality of Sleep", "Stress Level",
                                 "Physical Activity Level", "Daily Steps", "Heart Rate", "BMI Score", "Age"]
                     if c in df.columns]
-    return df[cols].rank().corr().rename(index={"BMI Score": "BMI (ordinal)"},
-                                         columns={"BMI Score": "BMI (ordinal)"})
+    return df[cols].rank().corr().rename(index={"BMI Score": "BMI category"},
+                                         columns={"BMI Score": "BMI category"})
 
 
 def driver_table(df) -> pd.DataFrame:
-    """How strongly each factor is associated with sleep quality (rank-based)."""
+    """How closely each factor lines up with sleep quality (rank-based link score; groups use the correlation ratio)."""
     rows = []
     numeric = [("Stress Level", "Stress"), ("Physical Activity Level", "Physical activity"),
                ("Daily Steps", "Lifestyle & body profile"), ("BMI Score", "Lifestyle & body profile"),
@@ -222,12 +241,12 @@ def driver_table(df) -> pd.DataFrame:
         if col in df.columns:
             r = spearman(df[col], df[TARGET])
             if not np.isnan(r):
-                rows.append(dict(Factor="BMI category (ordinal)" if col == "BMI Score" else col,
-                                 Group=group, r=r, strength=abs(r), Method="Spearman ρ"))
+                rows.append(dict(Factor="BMI category" if col == "BMI Score" else col,
+                                 Group=group, r=r, strength=abs(r), Method="Rank link score"))
     for col in ["Occupation", "Gender"]:
         e = eta(df[col], df[TARGET])
         if not np.isnan(e):
-            rows.append(dict(Factor=col, Group="Context", r=float("nan"), strength=e, Method="Correlation ratio η"))
+            rows.append(dict(Factor=col, Group="Context", r=float("nan"), strength=e, Method="Differences between groups"))
     return pd.DataFrame(rows).sort_values("strength", ascending=False).reset_index(drop=True) if rows \
         else pd.DataFrame(columns=["Factor", "Group", "r", "strength", "Method"])
 
@@ -307,7 +326,7 @@ def _trend_word(means: pd.Series) -> str:
         return "rises steadily"
     if len(d) >= 2 and (d < 0).all():
         return "falls steadily"
-    return "does not move in a straight line"
+    return "does not simply rise or fall"
 
 
 # --------------------------------------------------------------------------- findings
@@ -324,45 +343,44 @@ def build_findings(df, contrib=None):
 
     if contrib:
         t = contrib["table"].sort_values("alone", ascending=False).reset_index(drop=True)
-        parts = "; ".join(f"{esc(r.group)} {r.alone:.0%}" for r in t.itertuples())
+        parts = ", ".join(f"{esc(r.group)} {r.alone:.0%}" for r in t.itertuples())
         top = t.iloc[0]
         gap = top.alone - t.iloc[1].alone
         if top.alone < 0.05:
-            verdict = "None of the three explains much of the variation in this sample."
+            verdict = "None of the three accounts for much of the difference in sleep quality in this sample."
         elif gap < 0.05:
             verdict = f"{b(top.group)} leads, but the gap to the runner-up is small — the data cannot clearly separate them."
         else:
             verdict = f"{b(top.group)} comes out ahead in this sample."
         overlap = ""
         if t["unique"].sum() < 0.6 * t["alone"].sum():
-            overlap = " Much of what each group explains overlaps with the others, so their separate effects are hard to untangle."
+            overlap = " Much of what each group accounts for is shared with the others, so it is hard to say how much belongs to each one alone."
         out.append(("Research question", "What matters more for sleep quality?",
-                    f"Share of sleep-quality variation each group explains on its own: {parts}. {verdict}{overlap} "
-                    f"Together they explain {contrib['full']:.0%} (n = {contrib['n']})."))
+                    f"If we only knew one group, this is how much of the differences in people's sleep quality it would account for: "
+                    f"{parts}. {verdict}{overlap} Together, all three account for {contrib['full']:.0%} ({contrib['n']} people)."))
 
     r = spearman(df["Stress Level"], df[TARGET])
     gap = extreme_gap(df, "Stress Level")
     if not np.isnan(r):
-        body = (f"Stress and sleep quality are {strength(r)}ly associated "
-                f"({'inversely' if r < 0 else 'positively'}, Spearman ρ = {r:.2f}).")
+        body = plain_link("stress", "sleep quality", r) + "."
         if gap:
-            body += (f" The lowest-stress group (stress ≤ {gap['lo']:.0f}) averages {gap['low_mean']:.1f}/10 sleep quality "
-                     f"vs {gap['high_mean']:.1f}/10 for the highest-stress group (≥ {gap['hi']:.0f}).")
+            body += (f" The lowest-stress group (stress {gap['lo']:.0f} or below) averages {gap['low_mean']:.1f}/10 sleep quality, "
+                     f"compared with {gap['high_mean']:.1f}/10 for the highest-stress group ({gap['hi']:.0f} or above).")
         out.append(("Stress", "Stress and sleep quality", body))
 
     r = spearman(df["Physical Activity Level"], df[TARGET])
     bm = bin_means(df, "Physical Activity Level", TARGET)
     if not np.isnan(r):
-        body = f"Physical activity and sleep quality show a {strength(r)} association (ρ = {r:.2f})."
+        body = plain_link("physical activity", "sleep quality", r) + "."
         if len(bm) >= 3:
-            body += f" Average quality {_trend_word(bm['mean'])} across activity quartiles."
+            body += f" Splitting people into four equal-sized groups by activity, average sleep quality {_trend_word(bm['mean'])}."
         out.append(("Activity", "Physical activity and sleep quality", body))
 
     if "Daily Steps" in df.columns:
         r = spearman(df["Daily Steps"], df["Sleep Duration"])
         if not np.isnan(r):
             out.append(("Activity", "Daily steps and sleep duration",
-                        f"Daily steps and sleep duration show a {strength(r)} association (ρ = {r:.2f})."))
+                        plain_link("daily steps", "sleep duration", r) + "."))
 
     if "BMI Category" in df.columns:
         g = group_summary(df[df["BMI Category"] != "Unknown"], "BMI Category")
@@ -370,15 +388,15 @@ def build_findings(df, contrib=None):
         if len(g) >= 2:
             hi, lo = g.loc[g["quality"].idxmax()], g.loc[g["quality"].idxmin()]
             out.append(("Lifestyle", "BMI categories",
-                        f"{b(hi['BMI Category'])} averages {hi.quality:.1f}/10 sleep quality (n = {int(hi.n)}) versus "
-                        f"{b(lo['BMI Category'])} at {lo.quality:.1f}/10 (n = {int(lo.n)})."))
+                        f"{b(hi['BMI Category'])} averages {hi.quality:.1f}/10 sleep quality ({int(hi.n)} people) versus "
+                        f"{b(lo['BMI Category'])} at {lo.quality:.1f}/10 ({int(lo.n)} people)."))
 
     g = group_summary(df, "Occupation")
     g = g[g["n"] >= 10]
     if len(g) >= 2:
         hi, lo = g.loc[g["quality"].idxmax()], g.loc[g["quality"].idxmin()]
         out.append(("Demographics", "Occupation differences",
-                    f"Among occupations with ≥ 10 people, {b(hi['Occupation'])} reports the best sleep quality "
+                    f"Among occupations with at least 10 people, {b(hi['Occupation'])} reports the best sleep quality "
                     f"({hi.quality:.1f}/10) and {b(lo['Occupation'])} the lowest ({lo.quality:.1f}/10)."))
 
     if "Sleep Disorder" in df.columns:
@@ -388,31 +406,31 @@ def build_findings(df, contrib=None):
             hi, lo = g.loc[g["quality"].idxmax()], g.loc[g["quality"].idxmin()]
             out.append(("Health", "Sleep disorders",
                         f"Sleep quality averages {hi.quality:.1f}/10 for “{esc(hi['Sleep Disorder'])}” "
-                        f"(n = {int(hi.n)}) versus {lo.quality:.1f}/10 for “{esc(lo['Sleep Disorder'])}” (n = {int(lo.n)})."))
+                        f"({int(hi.n)} people) versus {lo.quality:.1f}/10 for “{esc(lo['Sleep Disorder'])}” ({int(lo.n)} people)."))
     return out
 
 
 def limitations(report, df_all, df):
     n = len(df_all)
     items = [
-        "<b>Correlation is not causation.</b> These patterns describe association only. Stress, activity and sleep "
-        "may influence each other in both directions, and unmeasured factors could drive all of them.",
-        f"<b>Small, single-snapshot sample.</b> {len(df):,} records are in view. Results may not generalise, and "
-        "subgroups (some occupations or BMI categories) are very small.",
-        "<b>Coarse, probably self-reported measures.</b> Sleep quality and stress are whole-number ratings, which "
-        "creates many ties and limits what any statistic can show.",
+        "<b>A link is not proof of cause.</b> These patterns show things that go together, not what causes what. Stress, "
+        "activity and sleep may influence each other in both directions, and something we did not measure could affect all of them.",
+        f"<b>Small sample, one snapshot in time.</b> {len(df):,} records are in view. Results may not apply to everyone, and "
+        "some groups (certain occupations or BMI categories) are very small.",
+        "<b>Rough, probably self-reported measures.</b> Sleep quality and stress are whole-number ratings (such as 6 or 7), "
+        "so many people share the same score. That limits how precisely any statistic can describe them.",
     ]
     if report["repeat_profiles"]:
         items.append(
             f"<b>Repeated profiles.</b> {report['repeat_profiles']:,} of {n:,} records "
-            f"({report['repeat_profiles'] / n:.0%}) match an earlier record on every column except Person ID. "
+            f"({report['repeat_profiles'] / n:.0%}) are exactly the same as an earlier record in every column except Person ID. "
             "They may be genuinely similar people or duplicate entries. Use the sidebar toggle to check whether "
-            "conclusions change without them.")
+            "the findings change without them.")
     if report["dropped_rows"] or report["out_of_range"] or report["unparseable_values"]:
         items.append(
-            f"<b>Cleaning applied.</b> {report['dropped_rows']} rows were dropped for missing core values, "
-            f"{sum(report['out_of_range'].values())} out-of-range values and "
-            f"{report['unparseable_values']} unreadable values were set to missing.")
+            f"<b>Cleaning applied.</b> {report['dropped_rows']} rows were dropped because key values were missing, "
+            f"{sum(report['out_of_range'].values())} impossible values and "
+            f"{report['unparseable_values']} unreadable values were treated as missing.")
     if report["optional_missing"]:
         items.append("<b>Columns not in this file:</b> " + esc(", ".join(report["optional_missing"]))
                      + ". Related charts are hidden or reduced.")
@@ -424,14 +442,14 @@ def headline(contrib) -> str:
     t = contrib["table"].sort_values("alone", ascending=False).reset_index(drop=True)
     top, second = t.iloc[0], t.iloc[1]
     if top.alone < 0.05:
-        lead = "No group explains much of the variation in sleep quality in this sample."
+        lead = "No group accounts for much of the difference in sleep quality in this sample."
     elif top.alone - second.alone < 0.05:
         lead = (f"{b(top.group)} and {b(second.group)} are too close to separate "
                 f"({top.alone:.0%} vs {second.alone:.0%}).")
     else:
-        lead = (f"{b(top.group)} lines up most closely with sleep quality, explaining {b(f'{top.alone:.0%}')} of its variation "
-                f"on its own, versus {second.alone:.0%} for {esc(second.group)}.")
-    return f"<p>{lead}</p><p>This is association, not cause — the Final Discoveries page shows the evidence and limits.</p>"
+        lead = (f"{b(top.group)} lines up most closely with sleep quality: on its own it accounts for {b(f'{top.alone:.0%}')} "
+                f"of the differences between people, versus {second.alone:.0%} for {esc(second.group)}.")
+    return f"<p>{lead}</p><p>This shows what goes together, not what causes what — the Final Discoveries page has the evidence and limits.</p>"
 
 
 def same_leader(c1, c2) -> str:
@@ -476,7 +494,7 @@ def profile_defs(df, min_n: int = 8):
         ("poor", "Poor sleepers", f"Sleep quality ≤ {q(T, .25):g}", df[T] <= q(T, .25), {T}),
         ("short", "Short sleepers", f"Sleep ≤ {q(D, .25):g} h", df[D] <= q(D, .25), {D}),
         ("calm_active", "Calm & active",
-         f"Stress ≤ {q(S, .5):g} and activity ≥ {q(A, .5):g} min/day (medians)",
+         f"Stress ≤ {q(S, .5):g} and activity ≥ {q(A, .5):g} min/day (the middle values)",
          (df[S] <= q(S, .5)) & (df[A] >= q(A, .5)), {S, A}),
     ]
     if "Sleep Disorder" in df.columns:
@@ -517,11 +535,11 @@ def effect_word(d: float) -> str:
     if d is None or np.isnan(d):
         return "n/a"
     a = abs(d)
-    return "negligible" if a < 0.2 else "small" if a < 0.5 else "moderate" if a < 0.8 else "large"
+    return "tiny" if a < 0.2 else "small" if a < 0.5 else "medium" if a < 0.8 else "large"
 
 
 def compare_profiles(df, ma, mb, metrics):
-    """Means of each profile, their difference and Cohen's d (pooled SD). Also returns how many people are in both."""
+    """Means of each profile, their difference and Cohen's d (difference ÷ pooled spread). Also returns how many people are in both."""
     a, b = df[ma], df[mb]
     rows = []
     for col, label, unit, dec in metrics:

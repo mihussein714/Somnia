@@ -186,16 +186,17 @@ section[data-testid="stSidebar"] [data-baseweb="tag"]{background:rgba(139,92,246
 /* ---- sidebar fixes: dropdown reliability + spacing ---- */
 /* Dropdown menus render in a portal outside the sidebar: keep them on top and clickable. */
 div[data-baseweb="popover"],div[data-baseweb="popover"] *{pointer-events:auto !important;}
-div[data-baseweb="popover"]{z-index:1000060 !important;}
-div[data-baseweb="popover"] ul[role="listbox"]{background:#141B34;border:1px solid rgba(139,92,246,.5);border-radius:12px;max-height:280px;overflow-y:auto;}
-div[data-baseweb="popover"] li[role="option"]{font-size:.85rem;padding:.45rem .8rem;cursor:pointer;}
+div[data-baseweb="popover"]{z-index:1000160 !important;max-width:min(92vw,380px);}  /* above the transparent header (1000100) so menus are never cut off */
+div[data-baseweb="popover"] ul[role="listbox"]{background:#141B34;border:1px solid rgba(139,92,246,.5);border-radius:12px;max-height:min(60vh,440px);overflow-y:auto;}  /* only scrolls on short screens */
+div[data-baseweb="popover"] li[role="option"]{font-size:.85rem;padding:.45rem .8rem;cursor:pointer;white-space:normal;}
 div[data-baseweb="popover"] li[role="option"]:hover,div[data-baseweb="popover"] li[aria-selected="true"]{background:rgba(139,92,246,.25);}
 /* Keep the select control itself clickable and never clipped by ancestors. */
 section[data-testid="stSidebar"] [data-baseweb="select"],section[data-testid="stSidebar"] [data-baseweb="select"] *{pointer-events:auto;cursor:pointer;}
 section[data-testid="stSidebar"] [data-baseweb="select"] input{cursor:text;}
 section[data-testid="stSidebar"] [data-baseweb="select"]>div{min-height:40px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid var(--line);}
 section[data-testid="stSidebar"] [data-baseweb="select"]>div:focus-within{border-color:rgba(139,92,246,.75);}
-section[data-testid="stSidebar"] div[data-testid="stSidebarUserContent"],section[data-testid="stSidebar"] div[data-testid="stSidebarContent"]{overflow-x:hidden;}
+section[data-testid="stSidebar"] div[data-testid="stSidebarContent"]{overflow-x:hidden;}  /* one scroller only: the inner wrapper must not scroll too */
+section[data-testid="stSidebar"] div[data-testid="stSidebarUserContent"]{overflow:visible;}
 section[data-testid="stSidebar"] div[data-testid="stSelectbox"],section[data-testid="stSidebar"] div[data-testid="stMultiSelect"],
 section[data-testid="stSidebar"] div[data-testid="stSlider"]{overflow:visible;}
 /* Spacing rhythm */
@@ -310,9 +311,8 @@ PRO_CSS = """
 .prof-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr));align-items:stretch;}
 .prof{display:flex;flex-direction:column;}
 .prof-stats{grid-template-columns:repeat(auto-fit,minmax(72px,1fr));}
-.prof p{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;}
-.prof .meta{margin-top:auto;padding-top:.5rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
-.prof h4{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.prof .meta{margin-top:auto;padding-top:.5rem;}
+.prof h4{overflow-wrap:anywhere;}
 .hero2 h1{font-size:clamp(2rem,4.2vw,3.1rem);}
 .hero2{padding:clamp(1.4rem,3vw,2.6rem);}
 /* ---- no red: force the violet accent everywhere Streamlit would fall back to its default primary ---- */
@@ -352,9 +352,12 @@ SIDEBAR_TOP_CSS = """
 
 MOBILE_CSS = """
 <style>
-.cmp-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:16px;}
-.cmp-wrap .cmp{min-width:560px;}
+.cmp-wrap{border-radius:16px;}
+@media (max-width:760px){.cmp-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}.cmp-wrap .cmp{min-width:560px;}}
 @media (max-width:900px){
+  /* side-by-side columns get cramped before Streamlit stacks them: stack earlier */
+  [data-testid="stHorizontalBlock"]{flex-wrap:wrap !important;}
+  [data-testid="stColumn"],[data-testid="column"]{flex:1 1 100% !important;width:100% !important;min-width:100% !important;}
   [data-testid="stMainBlockContainer"],.block-container{padding:1rem 1rem 3rem !important;}
   .kpi-grid{grid-template-columns:repeat(2,1fr) !important;gap:.7rem;}
   .find-grid,.prof-grid{grid-template-columns:1fr !important;}
@@ -368,8 +371,6 @@ MOBILE_CSS = """
   .hstat b{font-size:1.35rem;}
   .kpi-grid{grid-template-columns:1fr 1fr !important;}
   .prof-stats{grid-template-columns:repeat(2,1fr) !important;}
-  .prof p,.prof .meta{-webkit-line-clamp:unset;display:block;}
-  .prof h4{white-space:normal;}
   h1{font-size:1.7rem !important;}
   h2,h3{font-size:1.15rem !important;}
   [data-testid="stSidebar"] [data-baseweb="radio"]{min-height:44px;}
@@ -384,6 +385,19 @@ MOBILE_CSS = """
   .prof:hover{border-color:var(--line);}
   [data-testid="stSidebar"] div[role="radiogroup"]>label:hover{transform:none !important;}
 }
+</style>
+"""
+
+
+DEMO_CSS = """
+<style>
+.st-key-launch_demo button{min-height:62px;width:100%;border-radius:16px;box-shadow:0 14px 38px rgba(124,58,237,.55);}
+.st-key-launch_demo button p{font-size:1.15rem;font-weight:700;margin:0;}
+.st-key-launch_demo button:hover{box-shadow:0 18px 46px rgba(124,58,237,.7);}
+.cta-note{text-align:center;color:var(--muted);font-size:.86rem;margin:.6rem 0 0;}
+.cta-or{display:flex;align-items:center;gap:.8rem;color:var(--muted);font-size:.74rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;margin:1.4rem 0 .8rem;}
+.cta-or:before,.cta-or:after{content:"";flex:1;height:1px;background:var(--line);}
+.st-key-exit_demo_main button{background:rgba(255,255,255,.06) !important;border:1px solid rgba(139,92,246,.5) !important;box-shadow:none !important;width:100%;}
 </style>
 """
 
@@ -412,6 +426,7 @@ def inject_css() -> None:
     st.markdown(SIDEBAR_TOP_CSS, unsafe_allow_html=True)
     st.markdown(MOBILE_CSS, unsafe_allow_html=True)
     st.markdown(CHART_FIX_CSS, unsafe_allow_html=True)
+    st.markdown(DEMO_CSS, unsafe_allow_html=True)
 
 
 def _flat(s: str) -> str:
@@ -463,7 +478,7 @@ def spark(values, color, bins: int = 14) -> str:
     m, w = h.max(), 100 / bins
     rects = "".join(f"<rect x='{i * w + .8:.2f}' y='{30 - n / m * 28:.2f}' width='{w - 1.6:.2f}' height='{max(n / m * 28, .8):.2f}' "
                     f"rx='1.5' fill='{color}' opacity='{.3 + .7 * n / m:.2f}'/>" for i, n in enumerate(h))
-    return f"<svg class='spark' viewBox='0 0 100 30' preserveAspectRatio='none'>{rects}</svg><div class='kpi-cap'>distribution</div>"
+    return f"<svg class='spark' viewBox='0 0 100 30' preserveAspectRatio='none'>{rects}</svg><div class='kpi-cap'>how values are spread</div>"
 
 
 def kpi_grid(items) -> None:
@@ -489,7 +504,7 @@ def dataset_card(name: str, total: int, in_view: int, ncols: int) -> None:
            f'<div class="ds-status"><span class="dot"></span>Loaded · {in_view:,} of {total:,} in view</div></div>')
 
 
-def suspects(table, title="Three suspects, one question", sub="Share of sleep-quality variation each group explains on its own") -> None:
+def suspects(table, title="Three suspects, one question", sub="How much of the differences in sleep quality each group accounts for on its own") -> None:
     colors = {"Stress": "#F472B6", "Physical activity": "#22D3EE", "Lifestyle & body profile": "#8B5CF6"}
     rows = ""
     for r in table.sort_values("alone", ascending=False).itertuples():
@@ -497,6 +512,27 @@ def suspects(table, title="Three suspects, one question", sub="Share of sleep-qu
                  f'<div class="bar"><i style="width:{max(r.alone, 0) * 100:.1f}%;background:linear-gradient(90deg,{colors.get(r.group, "#8B5CF6")},'
                  f'{colors.get(r.group, "#8B5CF6")}99)"></i></div><div class="sus-sub">{esc(r.factors)}</div></div>')
     render(f'<div class="sus-wrap"><h4>{esc(title)}</h4><div class="sub">{esc(sub)}</div>{rows}</div>')
+
+
+def divider_or(text: str = "or") -> None:
+    render(f'<div class="cta-or">{esc(text)}</div>')
+
+
+def note(text: str) -> None:
+    render(f'<div class="cta-note">{esc(text)}</div>')
+
+
+def table(df) -> None:
+    """Small read-only table in the site style. Replaces st.dataframe so there is no scroll area inside the table."""
+    def cell(v):
+        if isinstance(v, (int, np.integer)):
+            return f"{int(v):,}"
+        if isinstance(v, (float, np.floating)):
+            return "–" if v != v else f"{v:,.2f}"
+        return esc(str(v))
+    head = "".join(f"<th>{esc(str(c))}</th>" for c in df.columns)
+    body = "".join("<tr>" + "".join(f"<td>{cell(v)}</td>" for v in row) + "</tr>" for row in df.itertuples(index=False))
+    render(f'<div class="cmp-wrap"><table class="cmp"><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>')
 
 
 def callout(body_html: str, title: str = "What this shows", kind: str = "") -> None:
@@ -550,11 +586,12 @@ def compare_table(rows, name_a: str, name_b: str) -> None:
     body = ""
     for r in rows.itertuples():
         sign = "+" if r.diff > 0 else "−" if r.diff < 0 else ""
+        tip = "" if r.d != r.d else f' title="Cohen’s d = {r.d:+.2f}"'   # exact value on hover
         body += (f'<tr><td>{esc(r.label)}</td><td>{r.a:,.{r.dec}f}{esc(r.unit)}</td><td>{r.b:,.{r.dec}f}{esc(r.unit)}</td>'
                  f'<td>{sign}{abs(r.diff):,.{r.dec}f}{esc(r.unit)}</td>'
-                 f'<td><span class="eff">{sd.effect_word(r.d)}{"" if r.d != r.d else f" (d = {r.d:+.2f})"}</span></td></tr>')
+                 f'<td><span class="eff"{tip}>{sd.effect_word(r.d)}</span></td></tr>')
     render(f'<div class="cmp-wrap"><table class="cmp"><thead><tr><th>Metric</th><th>{esc(name_a)}</th><th>{esc(name_b)}</th><th>Difference (A − B)</th>'
-           f'<th>Effect size</th></tr></thead><tbody>{body}</tbody></table></div>')
+           f'<th>Size of difference</th></tr></thead><tbody>{body}</tbody></table></div>')
 
 
 LOADER_CSS = """
