@@ -171,7 +171,7 @@ section[data-testid="stSidebar"] div[role="radiogroup"]>label:has(input:checked)
 __NAVICONS__
 .side-label{margin:.9rem 0 .15rem;display:flex;align-items:center;gap:.5rem;}
 .side-label:after{content:"";flex:1;height:1px;background:var(--line);}
-.brand{padding-bottom:.9rem;margin-bottom:.2rem;border-bottom:1px solid var(--line);}
+.brand{padding-bottom:.3rem;margin-bottom:.2rem;}
 .brand-logo{color:#fff;}
 .ds-card{padding:.7rem .8rem;border-radius:14px;background:rgba(255,255,255,.045);border:1px solid var(--line);}
 .ds-row{display:flex;gap:.6rem;align-items:center;}
@@ -414,6 +414,9 @@ div[data-testid="stPlotlyChart"] *{scrollbar-width:none;}
 div[data-testid="stPlotlyChart"] *::-webkit-scrollbar{display:none;}
 div[data-testid="stPlotlyChart"] > div,div[data-testid="stPlotlyChart"] .js-plotly-plot,div[data-testid="stPlotlyChart"] .plot-container{overflow:hidden !important;max-width:100%;}
 div[data-testid="stPlotlyChart"] .svg-container{max-width:100%;}
+/* no inner scrollbars: the chart's wrapper and the rows/columns around it size to their content instead of a fixed height */
+div[data-testid="stElementContainer"]:has(> div[data-testid="stPlotlyChart"]){height:auto !important;min-height:0 !important;overflow:visible !important;}
+[data-testid="stMain"] [data-testid="stHorizontalBlock"],[data-testid="stMain"] [data-testid="stColumn"],[data-testid="stMain"] [data-testid="stVerticalBlock"]{overflow:visible !important;}
 </style>
 """
 
